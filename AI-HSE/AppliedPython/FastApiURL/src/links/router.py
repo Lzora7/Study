@@ -49,11 +49,17 @@ async def _ensure_unique_short_code(session: AsyncSession, desired: Optional[str
 async def create_short_link(payload: LinkCreate, session: AsyncSession = Depends(get_async_session)):
     short_code = await _ensure_unique_short_code(session, payload.custom_alias)
     now = datetime.utcnow()
+    
+    # Convert expires_at to naive datetime if it's timezone-aware
+    expires_at = payload.expires_at
+    if expires_at and expires_at.tzinfo is not None:
+        expires_at = expires_at.replace(tzinfo=None)
+    
     stmt = insert(links).values(
         short_code=short_code,
         original_url=str(payload.original_url),
         created_at=now,
-        expires_at=payload.expires_at,
+        expires_at=expires_at,
         click_count=0,
     ).returning(links.c.short_code, links.c.original_url, links.c.created_at, links.c.expires_at)
     row = (await session.execute(stmt)).first()
@@ -159,7 +165,11 @@ async def update_short_link(short_code: str, payload: LinkUpdate, session: Async
     if payload.new_original_url:
         values["original_url"] = str(payload.new_original_url)
     if payload.expires_at is not None:
-        values["expires_at"] = payload.expires_at
+        # Convert expires_at to naive datetime if it's timezone-aware
+        expires_at = payload.expires_at
+        if expires_at.tzinfo is not None:
+            expires_at = expires_at.replace(tzinfo=None)
+        values["expires_at"] = expires_at
 
     if not values:
         # nothing to update
