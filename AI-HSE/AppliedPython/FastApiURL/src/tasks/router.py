@@ -7,7 +7,6 @@ router = APIRouter(prefix="/report")
 @router.get("/send")
 def send_email_handler():
     try:
-        # background_tasks.add_task(send_email, 'Sergei')
         send_email.apply_async(args=['Sergei'])
     except Exception as e:
         return {
