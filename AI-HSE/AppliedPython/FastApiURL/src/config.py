@@ -12,4 +12,4 @@ DB_NAME = os.getenv("DB_NAME")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 SMTP_USER = os.getenv("SMTP_USER")
 
-SECRET = "SECRET"
+SECRET = os.getenv("SECRET", "your-default-secret-key-change-in-production")

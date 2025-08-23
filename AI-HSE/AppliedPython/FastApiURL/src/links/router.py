@@ -1,25 +1,25 @@
-import random
-import string
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
+import string
+import secrets
+import re
 
-from fastapi import APIRouter, Depends, HTTPException, Response, Path
-from fastapi.responses import RedirectResponse
-from sqlalchemy import delete, insert, select, update
+from fastapi import APIRouter, Depends, HTTPException, Path, Response
+from sqlalchemy import select, insert, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_async_session
-from .models import links
-from .schemas import LinkCreate, LinkOut, LinkStats, LinkUpdate
+from links.models import links
+from links.schemas import LinkCreate, LinkOut, LinkUpdate, LinkStats
+
+router = APIRouter(prefix="/links", tags=["links"])
+open_router = APIRouter()
 
 
-router = APIRouter(prefix="/links", tags=["Links"])
-open_router = APIRouter(tags=["Links Redirect"])
 
-
-def _generate_short_code(length: int = 7) -> str:
+def _generate_short_code() -> str:
     alphabet = string.ascii_letters + string.digits
-    return "".join(random.choices(alphabet, k=length))
+    return "".join(secrets.choice(alphabet) for _ in range(7))
 
 
 async def _ensure_unique_short_code(session: AsyncSession, desired: Optional[str]) -> str:
@@ -48,7 +48,7 @@ async def _ensure_unique_short_code(session: AsyncSession, desired: Optional[str
 @router.post("/shorten", response_model=LinkOut)
 async def create_short_link(payload: LinkCreate, session: AsyncSession = Depends(get_async_session)):
     short_code = await _ensure_unique_short_code(session, payload.custom_alias)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     
     # Convert expires_at to naive datetime if it's timezone-aware
     expires_at = payload.expires_at
@@ -80,6 +80,15 @@ async def search_by_original_url(original_url: str, session: AsyncSession = Depe
     return {"short_codes": codes}
 
 
+# removed: /links/info/{short_code}
+
+
+
+
+
+
+
+
 @router.get("/{short_code}")
 async def redirect_short_link(
     short_code: str = Path(pattern=r"^[A-Za-z0-9_-]{3,64}$"),
@@ -89,7 +98,7 @@ async def redirect_short_link(
     if short_code in ["search", "shorten"]:
         raise HTTPException(status_code=404, detail="Short link not found")
     
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     query = select(links).where(links.c.short_code == short_code)
     result = await session.execute(query)
     row = result.mappings().first()
@@ -108,19 +117,53 @@ async def redirect_short_link(
         .values(click_count=links.c.click_count + 1, last_accessed_at=now)
     )
     await session.commit()
-    return RedirectResponse(url=row["original_url"], status_code=307)
+    return {
+        "short_code": short_code,
+        "original_url": row["original_url"],
+        "message": "redirect suppressed for Swagger/CORS; use this URL in browser",
+    }
 
 
 @open_router.get("/{short_code}")
 async def redirect_short_link_root(
-    short_code: str = Path(pattern=r"^[A-Za-z0-9_-]{3,64}$"),
+    short_code: str = Path(...),
     session: AsyncSession = Depends(get_async_session),
 ):
-    # Prevent conflicts with FastAPI system routes
-    if short_code in ["docs", "openapi.json", "redoc", "auth", "links", "report", "protected-route", "unprotected-route", "favicon.ico"]:
+    # Prevent conflicts with FastAPI system routes - reject anything with specific reserved words
+    reserved_routes = ["docs", "openapi.json", "redoc", "auth", "report", "links"]
+    if short_code in reserved_routes or short_code in ["protected-route", "unprotected-route"]:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    # Only accept short codes with specific pattern (letters, digits, underscore, dash)
+    if not re.match(r"^[A-Za-z0-9_-]{3,64}$", short_code):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    query = select(links).where(links.c.short_code == short_code)
+    result = await session.execute(query)
+    row = result.mappings().first()
+    if row is None:
         raise HTTPException(status_code=404, detail="Short link not found")
-    
-    return await redirect_short_link(short_code, session)
+    if row["expires_at"] is not None and row["expires_at"] <= now:
+        await session.execute(delete(links).where(links.c.id == row["id"]))
+        await session.commit()
+        raise HTTPException(status_code=404, detail="Short link expired")
+
+    # update stats but do not actually redirect — return JSON instead
+    await session.execute(
+        update(links)
+        .where(links.c.id == row["id"]) 
+        .values(click_count=links.c.click_count + 1, last_accessed_at=now)
+    )
+    await session.commit()
+    return {
+        "short_code": short_code,
+        "original_url": row["original_url"],
+        "message": "redirect suppressed for Swagger/CORS; use this URL in browser",
+    }
+
+
+# removed: /links/safe-preview/{short_code}
 
 
 @router.get("/{short_code}/stats", response_model=LinkStats)
@@ -196,11 +239,4 @@ async def update_short_link(short_code: str, payload: LinkUpdate, session: Async
     )
 
 
-@router.get("/search")
-async def search_by_original_url(original_url: str, session: AsyncSession = Depends(get_async_session)):
-    query = select(links.c.short_code).where(links.c.original_url == original_url)
-    result = await session.execute(query)
-    codes = [row[0] for row in result.all()]
-    return {"short_codes": codes}
-
-
+# removed: /links/preview-url

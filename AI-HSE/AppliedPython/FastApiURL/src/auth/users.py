@@ -11,8 +11,7 @@ from fastapi_users.authentication import (
 from fastapi_users.db import SQLAlchemyUserDatabase
 
 from auth.db import User, get_user_db
-
-SECRET = "SECRET"
+from config import SECRET
 
 # регистрация пользователя / отправка письма на почту / сброс пароля / верификация
 class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):

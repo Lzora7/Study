@@ -3,7 +3,7 @@ import smtplib
 from email.message import EmailMessage
 
 from celery import Celery
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from config import DB_HOST, DB_NAME, DB_PASS, DB_PORT, DB_USER, SMTP_PASSWORD, SMTP_USER
@@ -63,8 +63,8 @@ def purge_expired_links():
         engine = create_async_engine(_get_database_url())
         async_session = async_sessionmaker(engine, expire_on_commit=False)
         async with async_session() as session:
-            now = datetime.utcnow()
-            await session.execute(delete(links).where(links.c.expires_at.is_not(None), links.c.expires_at <= now))
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            await session.execute(delete(links).where((links.c.expires_at.is_not(None)) & (links.c.expires_at <= now)))
             await session.commit()
 
     asyncio.run(_purge())
