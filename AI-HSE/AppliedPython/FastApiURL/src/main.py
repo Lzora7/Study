@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from auth.users import auth_backend, current_active_user, fastapi_users
@@ -26,6 +27,15 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 # создание FastAPI приложения
 app = FastAPI(lifespan=lifespan)
 
+# настройка CORS для работы с Swagger UI
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # В продакшене указать конкретные домены
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # подключение роутеров
 app.include_router(
     fastapi_users.get_auth_router(auth_backend), prefix="/auth/jwt", tags=["auth"]
@@ -38,7 +48,6 @@ app.include_router(
 
 app.include_router(tasks_router)
 app.include_router(links_router)
-app.include_router(links_open_router)
 
 # защищенный эндпоинт
 @app.get("/protected-route")
@@ -49,6 +58,9 @@ def protected_route(user: User = Depends(current_active_user)):
 @app.get("/unprotected-route")
 def unprotected_route():
     return f"Hello, anonym"
+
+# открытый роутер должен быть ПОСЛЕ специфичных роутеров
+app.include_router(links_open_router)
 
 
 if __name__ == "__main__":
