@@ -10,7 +10,6 @@ class LinkCreate(BaseModel):
     expires_at: Optional[datetime] = None
 
 class LinkUpdate(BaseModel):
-    # Updating the short code (alias) or the original URL
     new_short_code: Optional[str] = Field(default=None, max_length=64)
     new_original_url: Optional[AnyUrl] = None
     expires_at: Optional[datetime] = None
