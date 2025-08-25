@@ -1,0 +1,10 @@
+[run]
+omit =
+    src/tasks/*
+    src/auth/*
+    src/main.py
+
+[report]
+show_missing = True
+skip_covered = False
+

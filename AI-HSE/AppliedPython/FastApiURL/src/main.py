@@ -9,7 +9,6 @@ from tasks.router import router as tasks_router
 import os
 from redis import asyncio as aioredis
 from fastapi_cache import FastAPICache
-from fastapi_cache.backends.redis import RedisBackend
 from links.router import router as links_router, open_router as links_open_router
 
 import uvicorn
@@ -17,10 +16,14 @@ import uvicorn
 # инициализация Redis для кэширования
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    redis_host = os.getenv("REDIS_HOST", "localhost")
-    redis_port = os.getenv("REDIS_PORT", "6379")
-    redis = aioredis.from_url(f"redis://{redis_host}:{redis_port}")
-    FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
+    disable_cache = os.getenv("DISABLE_CACHE", "0").lower() in {"1", "true", "yes"}
+    if not disable_cache:
+        # Import Redis backend lazily to avoid importing aioredis during tests
+        from fastapi_cache.backends.redis import RedisBackend
+        redis_host = os.getenv("REDIS_HOST", "localhost")
+        redis_port = os.getenv("REDIS_PORT", "6379")
+        redis = aioredis.from_url(f"redis://{redis_host}:{redis_port}")
+        FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
     # await create_db_and_tables()
     yield
 

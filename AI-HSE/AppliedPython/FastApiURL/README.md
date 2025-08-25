@@ -228,6 +228,37 @@ cd src && celery --app=tasks.tasks:celery worker -B -l INFO
 docker compose down
 ```
 
+## Тестирование и покрытие
+
+### Запуск тестов с покрытием
+
+```bash
+export DISABLE_CACHE=1
+coverage run -m pytest tests
+coverage html
+open htmlcov/index.html  # macOS
+```
+
+Готовый отчёт покрытия находится в каталоге `htmlcov/` и доступен без запуска тестов: откройте `htmlcov/index.html`.
+
+### Нагрузочное тестирование (Locust)
+
+```bash
+export BASE_URL=http://localhost:9999
+locust -f locustfile.py --headless -u 200 -r 50 -t 1m
+```
+
+Параметры:
+- `-u` — количество одновременных пользователей
+- `-r` — скорость появления пользователей в секунду
+- `-t` — длительность теста
+
+### Примечания по тестам
+- Тесты используют SQLite (aiosqlite) и не требуют PostgreSQL/Redis.
+- Инициализация Redis отключается переменной окружения `DISABLE_CACHE=1`.
+- Конфигурация покрытия в `.coveragerc` исключает нецелевые модули (auth/tasks/main) из подсчёта.
+- Запускать из корня проекта: `coverage run -m pytest tests && coverage html`.
+
 ## База данных
 
 ### Схема БД
