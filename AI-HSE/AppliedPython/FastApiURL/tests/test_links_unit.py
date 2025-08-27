@@ -9,11 +9,12 @@ def test_generate_short_code_format():
     assert isinstance(code, str)
     assert len(code) == 7
     assert re.match(r"^[A-Za-z0-9]{7}$", code)
+    assert not code.isdigit()
+    assert not code.isalpha()
 
 
 def test_generate_short_code_randomness():
     codes = { _generate_short_code() for _ in range(500) }
-    # Very unlikely to collide; this checks basic randomness
     assert len(codes) > 490
 
 

@@ -15,10 +15,11 @@ from links.schemas import LinkCreate, LinkUpdate
 
 @pytest.mark.asyncio
 async def test_create_with_tz_expires(db_session):
+    # создание ссылки с временем действия
     expires = datetime.now(timezone.utc) + timedelta(days=1)
-    payload = LinkCreate(original_url="https://tz.example", custom_alias="tz1", expires_at=expires)
-    out = await create_short_link(payload, session=db_session)
-    assert out.short_code == "tz1"
+    link = LinkCreate(original_url="https://timezone.example", custom_alias="timezonecheck", expires_at=expires)
+    out = await create_short_link(link, session=db_session)
+    assert out.short_code == "timezonecheck"
     assert out.expires_at is not None
     # ensure naive datetime stored (tzinfo removed)
     assert out.expires_at.tzinfo is None
@@ -26,28 +27,30 @@ async def test_create_with_tz_expires(db_session):
 
 @pytest.mark.asyncio
 async def test_redirect_not_found(db_session):
+    # проверка на несуществующую ссылку
     with pytest.raises(Exception):
         await redirect_short_link(short_code="nope", session=db_session)
 
 
 @pytest.mark.asyncio
 async def test_root_reserved(db_session):
+    # проверка на зарезервированный код
     with pytest.raises(Exception):
         await redirect_short_link_root(short_code="docs", session=db_session)
 
 
 @pytest.mark.asyncio
 async def test_update_no_changes_and_with_tz(db_session):
-    # create link
-    payload = LinkCreate(original_url="https://up.example", custom_alias="up0")
-    out = await create_short_link(payload, session=db_session)
+    # создание ссылки
+    link = LinkCreate(original_url="https://up.example", custom_alias="up0")
+    out = await create_short_link(link, session=db_session)
 
-    # no values update returns current state
+    # проверка на обновление без изменений
     out2 = await update_short_link("up0", LinkUpdate(), session=db_session)
     assert out2.short_code == out.short_code
     assert out2.original_url == out.original_url
 
-    # update expires_at with tz-aware
+    # обновление срока действия с учетом часового пояса
     new_exp = datetime.now(timezone.utc) + timedelta(days=2)
     out3 = await update_short_link("up0", LinkUpdate(expires_at=new_exp), session=db_session)
     assert out3.expires_at is not None
@@ -56,7 +59,7 @@ async def test_update_no_changes_and_with_tz(db_session):
 
 @pytest.mark.asyncio
 async def test_delete_and_stats_404(db_session):
-    # deleting unknown
+    # удаление несуществующей ссылки
     with pytest.raises(Exception):
         await delete_short_link("unknown", session=db_session)
 

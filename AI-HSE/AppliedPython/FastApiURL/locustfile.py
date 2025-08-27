@@ -6,7 +6,9 @@ from locust import HttpUser, task, between
 
 
 class LinkUser(HttpUser):
+    # время ожидания между запросами
     wait_time = between(0.1, 0.5)
+
     host = os.getenv("BASE_URL", "http://localhost:9999")
 
     @task(3)
@@ -24,7 +26,7 @@ class LinkUser(HttpUser):
 
     @task(2)
     def redirect_existing(self):
-        # hit some static aliases that may or may not exist; errors still stress the system
+        # проверка на существующие ссылки
         alias = random.choice(["demoalias", "a1", "a2", "newcode123", "missing"])
         self.client.get(f"/{alias}", name="GET /{short_code}")
 
