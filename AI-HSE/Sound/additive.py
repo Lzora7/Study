@@ -38,16 +38,25 @@ def adsr_envelope(num_frames, attack=0.0, decay=0.0, sustain=1.0, release=0.0, n
     num_release = int(nframes * release)  
     
     # Initialize the ADSR envelope array with the sustain level
-    adsr = np.full(num_frames, sustain)
-    
+    adsr = np.full(num_frames, sustain) # [1,1,1,1 ...]
+    len_adsr = len(adsr)
+
     # Attack phase: linearly increase values from 0 to 1
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
-    
+    attack_phase_np = np.linspace(0, 1, num_attack)
+    adsr[:num_attack] = attack_phase_np
+
     # Decay phase: calculate values using a polynomial decay
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
+    t = np.linspace(1, 0, num_decay)
+    decay_phase_np = sustain + (1 - sustain) * (t ** n_decay)
+    adsr[num_attack:num_decay] = decay_phase_np
     
     # Release phase: linearly decrease values from sustain to 0
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
+    release_phase_np = np.linspace(sustain, 0, num_release)
+    adsr[-num_release:] = release_phase_np
+
     return adsr  
 
 def oscillator_bank(frequencies, amplitudes, sample_rate):
