@@ -1,3 +1,4 @@
+from matplotlib.pyplot import phase_spectrum
 import numpy as np
 
 def adsr_envelope(num_frames, attack=0.0, decay=0.0, sustain=1.0, release=0.0, n_decay=2):
@@ -88,14 +89,16 @@ def oscillator_bank(frequencies, amplitudes, sample_rate):
         raise ValueError("The shapes of frequencies and amplitudes must match.")
     
     # Convert frequencies to radians per sample
-    freqs = frequencies * 2.0 * np.pi / sample_rate % (2.0 * np.pi)
+    freqs = frequencies * 2.0 * np.pi / sample_rate % (2.0 * np.pi) # приращения (на сколько увелич / уменьш по сравнению с прошлым сэмплом)
     
     # Compute cumulative sum of frequencies to get phases
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
+    phase = np.cumsum(freqs)
     
     # Generate the waveform by summing sinusoidal signals
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
-    
+    waveform = np.sin(phase) * amplitudes
+
     return waveform.sum(axis=-1)  
 
 def extend_freqs(base, pattern):
@@ -124,14 +127,15 @@ def extend_freqs(base, pattern):
     array([ 440.,  660.,  880.])
     """
     
-    # if isinstance(pattern, int):
+    if isinstance(pattern, int):
         # Generate linear multipliers if pattern is an integer
-        #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
-    # else:
+        # ╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
+        harmonics = base * pattern
+    else:
         # Convert list or other types to array
-        #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
-
+        # ╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
+        np_array = np.array(pattern)
     # Multiply base frequency by the multipliers
-    #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
+    # ╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
     
-    pass
+    harmonics = base * pattern
