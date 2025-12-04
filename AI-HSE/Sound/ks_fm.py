@@ -21,16 +21,24 @@ def ks_note(sr, note, duration, decay):
     T = int(sr / freq)
     
     # Initialize the delay line with random noise
-    #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
+    delay_line = np.random.rand(T)
 
     # Initialize the output buffer
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
-    
+    output = []
+
     # Fill the output buffer using the Karplus-Strong algorithm
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ'
-    
-    pass
 
+    for i in range(int(sr*duration)): # ход по каждой точке дискретизации во всей длительности
+        output.append(delay_line[0])
+
+        cur_out = decay * ((delay_line[0] + delay_line[1]) / 2)
+        delay_line = np.roll(delay_line, -1) # последний элемент стал первым
+
+        delay_line[-1] = cur_out
+
+    return np.array(output)
 
 def make_melody(filename, sixteenth_len, sr, note_function):
     """

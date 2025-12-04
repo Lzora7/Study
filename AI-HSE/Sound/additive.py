@@ -44,19 +44,22 @@ def adsr_envelope(num_frames, attack=0.0, decay=0.0, sustain=1.0, release=0.0, n
 
     # Attack phase: linearly increase values from 0 to 1
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
-    attack_phase_np = np.linspace(0, 1, num_attack)
-    adsr[:num_attack] = attack_phase_np
+    if num_attack > 0:
+        attack_phase_np = np.linspace(0, 1, num_attack)
+        adsr[:num_attack] = attack_phase_np
 
     # Decay phase: calculate values using a polynomial decay
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
-    t = np.linspace(1, 0, num_decay)
-    decay_phase_np = sustain + (1 - sustain) * (t ** n_decay)
-    adsr[num_attack:num_decay] = decay_phase_np
+    if num_decay > 0:
+        t = np.linspace(1, 0, num_decay)
+        decay_phase_np = sustain + (1 - sustain) * (t ** n_decay)
+        adsr[num_attack:num_attack+num_decay] = decay_phase_np
     
     # Release phase: linearly decrease values from sustain to 0
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
-    release_phase_np = np.linspace(sustain, 0, num_release)
-    adsr[-num_release:] = release_phase_np
+    if num_release > 0:
+        release_phase_np = np.linspace(sustain, 0, num_release)
+        adsr[-num_release:] = release_phase_np
 
     return adsr  
 
@@ -93,7 +96,7 @@ def oscillator_bank(frequencies, amplitudes, sample_rate):
     
     # Compute cumulative sum of frequencies to get phases
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
-    phase = np.cumsum(freqs)
+    phase = np.cumsum(freqs, axis=0)
     
     # Generate the waveform by summing sinusoidal signals
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
@@ -130,12 +133,14 @@ def extend_freqs(base, pattern):
     if isinstance(pattern, int):
         # Generate linear multipliers if pattern is an integer
         # ╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
-        harmonics = base * pattern
+        multipliers = np.arange(1, pattern+1)
     else:
         # Convert list or other types to array
         # ╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
-        np_array = np.array(pattern)
+        multipliers = np.array(pattern)
     # Multiply base frequency by the multipliers
     # ╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
     
-    harmonics = base * pattern
+    harmonics = base * multipliers
+
+    return harmonics
