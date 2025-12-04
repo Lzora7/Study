@@ -34,7 +34,7 @@ def ks_note(sr, note, duration, decay):
         output.append(delay_line[0])
 
         cur_out = decay * ((delay_line[0] + delay_line[1]) / 2)
-        delay_line = np.roll(delay_line, -1) # последний элемент стал первым
+        delay_line = np.roll(delay_line, -1) # первый элемент стал последним (сдвиг)
 
         delay_line[-1] = cur_out
 
@@ -65,8 +65,8 @@ def make_melody(filename, sixteenth_len, sr, note_function):
         Array of audio samples representing the generated melody.
     """
     melody = np.loadtxt(filename)
-    notes = melody[:, 0]
-    durations = sixteenth_len * melody[:, 1]
+    notes = melody[:, 0] 
+    durations = sixteenth_len * melody[:, 1] 
     
     
     # Initialize an empty list to store the audio samples
@@ -74,11 +74,15 @@ def make_melody(filename, sixteenth_len, sr, note_function):
     
     # Generate audio samples for each note and append to the list
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
+    for i, note in enumerate(notes):
+        note_sound = note_function(sr, note, durations[i])
+        audio_samples.append(note_sound)
     
     # Concatenate all the audio samples into a single array
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
-    
-    pass
+    out = np.concatenate(audio_samples)
+
+    return out
 
 
 def fm_note(sr, note, duration, ratio=2, I=2, 
