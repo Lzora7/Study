@@ -113,23 +113,32 @@ def fm_note(sr, note, duration, ratio=2, I=2,
     """
     # Calculate the number of samples
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
+    num_samples = sr * duration
     
     # Calculate the carrier frequency (fc)
-    fc = 440 * 2 ** (note / 12.0)
+    fc = 440 * 2 ** (note / 12.0) # - несущая частота
     
     # Calculate the modulation frequency (fm)
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
+    fm = fc * ratio
     
     # Generate the time array
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
+    time_array = np.arange(num_samples) / sr
     
     # Generate the envelopes for amplitude and modulation index
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
+    ampl = amplitude(num_samples, sr)
+    modul = envelope(num_samples, sr)
     
     # Generate the FM waveform
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
-    
-    pass
+    fm_wave = ampl * np.sin(
+       2*np.pi * fc * time_array + \
+       I*modul*np.sin(2*np.pi * fm * time_array)
+    )
+
+    return fm_wave
 
 
 def exp_env(N, sr, mu=3):
