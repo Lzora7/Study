@@ -1,4 +1,6 @@
 import numpy as np
+from additive import adsr_envelope
+from pyarrow import DurationScalar
 
 def ks_note(sr, note, duration, decay):
     """
@@ -75,8 +77,11 @@ def make_melody(filename, sixteenth_len, sr, note_function):
     # Generate audio samples for each note and append to the list
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
     for i, note in enumerate(notes):
-        note_sound = note_function(sr, note, durations[i])
-        audio_samples.append(note_sound)
+        if np.isnan(note):
+            note_sound = np.zeros(int(sr*durations[i]))
+        else:
+            note_sound = note_function(sr, note, durations[i])
+            audio_samples.append(note_sound)
     
     # Concatenate all the audio samples into a single array
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
@@ -113,7 +118,7 @@ def fm_note(sr, note, duration, ratio=2, I=2,
     """
     # Calculate the number of samples
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
-    num_samples = sr * duration
+    num_samples = int(sr * duration)
     
     # Calculate the carrier frequency (fc)
     fc = 440 * 2 ** (note / 12.0) # - несущая частота
@@ -208,11 +213,13 @@ def fm_el_guitar_note(sr, note, duration, mu=3):
     """
     # Generate the plucked string sound
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
-    
+    base_sound = fm_string_note(sr, note, duration, mu=3)
+
     # Convert the plucked string sound to a square wave
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
-    
-    pass
+    guitar_sound = np.sign(base_sound)
+
+    return guitar_sound
 
 
 def fm_bell_note(sr, note, duration):
@@ -231,7 +238,10 @@ def fm_bell_note(sr, note, duration):
     -------
     ndarray(N): Audio samples for this note
     """
-    pass
+    envelope = lambda N, sr: exp_env(N, sr, 0.8)
+    return fm_note(sr, note, duration,
+                ratio = 1.4, I = 2, envelope = envelope,
+                amplitude = envelope)
 
 
 def brass_env(N, sr):
@@ -250,8 +260,28 @@ def brass_env(N, sr):
     ndarray
         An array of length N containing the envelope samples.
     """
+    
+    duration = N / sr
+    sustain_level = 0.8 
 
-    pass
+    if duration < 0.3:
+        attack_prop = 1/3
+        decay_prop = 1/3 
+        release_prop = 1/3
+       
+    else:
+        attack_prop = 0.1 / duration
+        decay_prop = 0.1 / duration
+        release_prop = 0.1 / duration
+
+    envelope = adsr_envelope(N, 
+                            attack=attack_prop, 
+                            decay=decay_prop, 
+                            sustain=sustain_level, 
+                            release=release_prop
+                            )
+
+    return envelope
 
 
 def fm_brass_note(sr, note, duration):
@@ -271,8 +301,11 @@ def fm_brass_note(sr, note, duration):
     ndarray(N): Audio samples for this note
     """
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
-    
-    pass
+
+    envelope = lambda N, sr: brass_env(N, sr)
+    return fm_note(sr, note, duration,
+                ratio = 1, I = 10, envelope = envelope,
+                amplitude = envelope)
 
 
 
@@ -292,7 +325,13 @@ def drum_env(N, sr):
     """
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
     
-    pass
+    mu = 85
+
+    t = np.arange(N) / sr
+    envelope = (t**2) * np.exp(-mu * t)
+    envelope = envelope / np.max(envelope)
+
+    return envelope
 
 
 def fm_drum_sound(sr, note, duration, fixed_note=-14):
@@ -315,7 +354,10 @@ def fm_drum_sound(sr, note, duration, fixed_note=-14):
     """
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
     
-    pass
+    envelope = lambda N, sr: drum_env(N, sr)
+    return fm_note(sr, fixed_note, duration,
+                ratio = 1.4, I = 2, envelope = envelope,
+                amplitude = envelope)
 
 
 def snare_drum_sound(sr, note, duration):
@@ -335,8 +377,12 @@ def snare_drum_sound(sr, note, duration):
     ndarray(N): Audio samples for this drum hit
     """
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
-    
-    pass
+    N = int(sr * duration)
+
+    noise = np.random.rand(N)
+    sound = noise * drum_env(N, sr)
+
+    return sound
 
 
 def wood_drum_env(N, sr):
@@ -354,8 +400,18 @@ def wood_drum_env(N, sr):
     ndarray(N): Envelope samples
     """
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
+
+    decay_time = 0.008 # сек
     
-    pass
+    # кол сэмплов для decay
+    decay_samples = int(sr * decay_time)
+    
+    envelope = np.zeros(N)
+    
+    if decay_samples > 0:
+        envelope[:decay_samples] = np.linspace(1, 0, decay_samples)
+    
+    return envelope
 
 
 def fm_wood_drum_sound(sr, note, duration, fixed_note=-14):
@@ -378,7 +434,10 @@ def fm_wood_drum_sound(sr, note, duration, fixed_note=-14):
     """
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
     
-    pass
+    envelope = lambda N, sr: wood_drum_env(N, sr)
+    return fm_note(sr, fixed_note, duration,
+                ratio = 1.4, I = 10, envelope = envelope,
+                amplitude = envelope)
 
 
 def dirty_bass_env(N, sr):
@@ -397,8 +456,21 @@ def dirty_bass_env(N, sr):
     ndarray(N): Envelope samples
     """
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
+    mu = 5
+
+    func_change_prop = 0.5 # пропорция разных функций
+    part_N = N * func_change_prop # сколько N в доле
+
+    t1 = np.arange(part_N) / sr
+    t2 = np.arange(N - part_N) / sr
+
+    envelope_part_1 = np.exp(-mu * t1)
+    envelope_part_2 = np.exp(-mu * t2)
+
+    envelope = np.concatenate([envelope_part_1, envelope_part_2])
+    envelope = envelope / np.max(envelope)
     
-    pass
+    return envelope
 
 
 def fm_dirty_bass_note(sr, note, duration):
@@ -420,4 +492,7 @@ def fm_dirty_bass_note(sr, note, duration):
     """
     #╰( ͡° ͜ʖ ͡° )つ──☆*:・ﾟ
     
-    pass
+    envelope = lambda N, sr: dirty_bass_env(N, sr)
+    return fm_note(sr, note, duration,
+                ratio = 1, I = 18, envelope = envelope,
+                amplitude = envelope)
