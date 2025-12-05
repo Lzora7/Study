@@ -465,7 +465,7 @@ def dirty_bass_env(N, sr):
     t2 = np.arange(N - part_N) / sr
 
     envelope_part_1 = np.exp(-mu * t1)
-    envelope_part_2 = np.exp(-mu * t2)
+    envelope_part_2 = np.exp(mu * t2)
 
     envelope = np.concatenate([envelope_part_1, envelope_part_2])
     envelope = envelope / np.max(envelope)
