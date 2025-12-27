@@ -1,0 +1,41 @@
+defaults:
+  - model: deep_speech2
+  - writer: cometml
+  - metrics: example
+  - datasets: example
+  - dataloader: example
+  - transforms: with_specaug
+  - _self_
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 1e-3
+  weight_decay: 0.0001
+  betas: [0.9, 0.98]
+  eps: 1e-8
+lr_scheduler:
+  _target_: torch.optim.lr_scheduler.OneCycleLR
+  max_lr: 2.5e-3  
+  pct_start: 0.1  # 10% warmup
+  steps_per_epoch: ${trainer.epoch_len}
+  epochs: ${trainer.n_epochs}
+  anneal_strategy: cos
+  div_factor: 25.0 
+  final_div_factor: 10000.0 
+loss_function:
+  _target_: src.loss.CTCLossWrapper
+text_encoder:
+  _target_: src.text_encoder.CTCTextEncoder
+trainer:
+  log_step: 50
+  n_epochs: 500
+  epoch_len: 100
+  max_grad_norm: 1.0  # Increased from 0.5 to allow larger gradient updates
+  device_tensors: ["spectrogram", "text_encoded"] # which tensors should be on device (ex. GPU)
+  resume_from: null # null or path to the checkpoint dir with *.pth and config.yaml
+  device: auto # device name or "auto"
+  override: False # if True, will override the previous run with the same name
+  monitor: "min val_WER_(Argmax)" # "off" or "max/min metric_name", i.e. our goal is to maximize/minimize metric
+  save_period: 5 # checkpoint each save_period epochs in addition to the best epoch
+  early_stop: ${trainer.n_epochs} # epochs for early stopping
+  save_dir: "saved"
+  seed: 1  

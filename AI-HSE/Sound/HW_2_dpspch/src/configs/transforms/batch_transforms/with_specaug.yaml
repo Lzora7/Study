@@ -1,0 +1,10 @@
+train:
+  spectrogram:
+    _target_: src.transforms.spec_augs.spec_augment.SpecAugment
+    freq_mask_param: 27  # F parameter
+    num_freq_masks: 2    # mF parameter
+    time_mask_ratio: 0.05  # pS parameter
+    num_time_masks: 10   # number of time masks
+inference:
+  spectrogram: null  # no augmentation during inference
+

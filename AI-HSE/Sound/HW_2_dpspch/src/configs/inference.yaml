@@ -1,0 +1,13 @@
+defaults:
+  - model: deep_speech2_small
+  - metrics: example
+  - datasets: example # we can use example dataset for inference
+  - dataloader: example
+  - transforms: example
+  - _self_
+inferencer:
+  device_tensors: ["spectrogram", "text_encoded"] # which tensors should be on device (ex. GPU)
+  device: auto # device name or "auto"
+  save_path: "example" # any name here, can be a dataset name
+  seed: 1
+  from_pretrained: "saved/model_best.pth" # path to the pretrained model

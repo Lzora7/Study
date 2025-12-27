@@ -1,0 +1,5 @@
+defaults:
+  - batch_transforms: with_specaug
+  - instance_transforms: with_augs
+  - _self_
+

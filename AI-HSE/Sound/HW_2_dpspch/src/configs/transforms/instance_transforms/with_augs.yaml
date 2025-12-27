@@ -1,0 +1,21 @@
+train:
+  get_spectrogram:
+    _target_: torchaudio.transforms.MelSpectrogram
+    sample_rate: 16000
+  audio:
+    _target_: torchvision.transforms.v2.Compose
+    transforms:
+      - _target_: src.transforms.wav_augs.Gain
+        p: 0.3 
+      - _target_: src.transforms.wav_augs.SpeedPerturbation
+        speeds: [0.9, 1.0, 1.1] 
+        sample_rate: 16000
+        p: 0.1  
+      - _target_: src.transforms.wav_augs.SimpleNoise
+        noise_type: "gaussian"  # "gaussian" or "uniform"
+        snr_range: [0, 15]  # SNR range in dB
+        p: 0.1
+inference:
+  get_spectrogram:
+    _target_: torchaudio.transforms.MelSpectrogram
+    sample_rate: 16000
