@@ -13,6 +13,7 @@ hydra-core
 pyctcdecode
 gdown 
 pyyaml
+wget
 
 black
 isort

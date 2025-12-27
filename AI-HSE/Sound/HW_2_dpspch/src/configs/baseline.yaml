@@ -28,7 +28,7 @@ text_encoder:
 trainer:
   log_step: 50
   n_epochs: 500
-  epoch_len: 100
+  epoch_len: null  # null = epoch-based training (all batches per epoch). Set to number for iteration-based training
   max_grad_norm: 1.0  # Increased from 0.5 to allow larger gradient updates
   device_tensors: ["spectrogram", "text_encoded"] # which tensors should be on device (ex. GPU)
   resume_from: null # null or path to the checkpoint dir with *.pth and config.yaml

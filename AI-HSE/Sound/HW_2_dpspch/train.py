@@ -63,14 +63,24 @@ def main(config):
                 instantiate(metric_config, text_encoder=text_encoder)
             )
 
+    # epoch_len = number of iterations for iteration-based training
+    # epoch_len = None or len(dataloader) for epoch-based training
+    epoch_len = config.trainer.get("epoch_len")
+    
+    # Calculate steps_per_epoch for lr_scheduler if epoch_len is None
+    if epoch_len is None:
+        steps_per_epoch = len(dataloaders["train"])
+    else:
+        steps_per_epoch = epoch_len
+    
+    # Update lr_scheduler config with calculated steps_per_epoch
+    if hasattr(config.lr_scheduler, "steps_per_epoch"):
+        config.lr_scheduler.steps_per_epoch = steps_per_epoch
+
     # build optimizer, learning rate scheduler
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
     optimizer = instantiate(config.optimizer, params=trainable_params)
     lr_scheduler = instantiate(config.lr_scheduler, optimizer=optimizer)
-
-    # epoch_len = number of iterations for iteration-based training
-    # epoch_len = None or len(dataloader) for epoch-based training
-    epoch_len = config.trainer.get("epoch_len")
 
     trainer = Trainer(
         model=model,
