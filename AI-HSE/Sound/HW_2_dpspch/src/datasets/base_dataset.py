@@ -1,5 +1,6 @@
 import logging
 import random
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -81,8 +82,8 @@ class BaseDataset(Dataset):
         data_dict = self._index[ind]
         audio_path = data_dict["path"]
         audio = self.load_audio(audio_path)
-        text = data_dict["text"]
-        text_encoded = self.text_encoder.encode(text)
+        text = data_dict.get("text", "")
+        text_encoded = self.text_encoder.encode(text) if text else self.text_encoder.encode("")
 
         spectrogram = self.get_spectrogram(audio)
 
@@ -92,6 +93,7 @@ class BaseDataset(Dataset):
             "text": text,
             "text_encoded": text_encoded,
             "audio_path": audio_path,
+            "utterance_id": data_dict.get("utterance_id", Path(audio_path).stem),  # ID from dataset or filename
         }
 
         # TODO think of how to apply wave augs before calculating spectrogram

@@ -123,7 +123,7 @@ class Inferencer(BaseTrainer):
         # ASR inference logic: decode predictions and save results
         
         batch = self.move_batch_to_device(batch)
-        batch = self.transform_batch(batch)  # transform batch on device -- faster
+        batch = self.transform_batch(batch)
 
         outputs = self.model(**batch)
         batch.update(outputs)
@@ -132,40 +132,60 @@ class Inferencer(BaseTrainer):
             for met in self.metrics["inference"]:
                 metrics.update(met.name, met(**batch))
 
-        # Save predictions to disk if save_path is provided
+        # save predictions to disk if save_path
         if self.save_path is not None:
             batch_size = len(batch["text"])
-            current_id = batch_idx * batch_size
 
             for i in range(batch_size):
-                # Get predictions using argmax (greedy decoding)
+                # get predictions using argmax
                 log_probs = batch["log_probs"][i]  # [time, vocab]
                 log_probs_length = int(batch["log_probs_length"][i].item())
                 
-                # Decode to token indices
+                # decode to token indices
                 pred_indices = log_probs[:log_probs_length].argmax(dim=-1).cpu().numpy()
                 
-                # Decode to text using CTC decode
+                # decode to text using CTC decode
                 pred_text = self.text_encoder.ctc_decode(pred_indices)
                 
-                # Get target text
+                # get target text
                 target_text = batch["text"][i]
                 target_text_normalized = self.text_encoder.normalize_text(target_text)
                 
-                # Get audio path
+                # get audio path
                 audio_path = batch["audio_path"][i] if "audio_path" in batch else None
 
-                output_id = current_id + i
+                # get utterance ID from batch (if available) or extract from audio_path
+                if "utterance_id" in batch and batch["utterance_id"][i]:
+                    utterance_id = batch["utterance_id"][i]
+                else:
+                    from pathlib import Path
+                    utterance_id = Path(audio_path).stem if audio_path else f"utterance_{batch_idx}_{i}"
 
-                # Save prediction in ASR format
+                # save prediction with utterance ID as filename
                 output = {
                     "pred_text": pred_text,
                     "target_text": target_text_normalized,
                     "pred_indices": pred_indices,
                     "audio_path": audio_path,
+                    "utterance_id": utterance_id,
                 }
 
-                torch.save(output, self.save_path / part / f"output_{output_id}.pth")
+                # save as text file (for compatibility with calc_metrics.py)
+                output_file = self.save_path / part / f"{utterance_id}.txt"
+                output_file.parent.mkdir(exist_ok=True, parents=True)
+                with output_file.open('w', encoding='utf-8') as f:
+                    f.write(pred_text)
+                
+                # also save full output as JSON (optional)
+                import json
+                output_json_file = self.save_path / part / f"{utterance_id}.json"
+                with output_json_file.open('w', encoding='utf-8') as f:
+                    json.dump({
+                        "pred_text": pred_text,
+                        "target_text": target_text_normalized,
+                        "audio_path": audio_path,
+                        "utterance_id": utterance_id,
+                    }, f, indent=2, ensure_ascii=False)
 
         return batch
 

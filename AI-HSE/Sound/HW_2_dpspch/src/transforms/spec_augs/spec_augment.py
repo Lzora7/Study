@@ -6,12 +6,7 @@ import torch.nn.functional as F
 class SpecAugment(nn.Module):
     """
     Applies frequency masking and time masking to spectrograms.
-    Used for data augmentation during training.
-    
-    Common parameters:
-    - F = 27 (frequency mask parameter)
-    - 10 time masks with maximum time-mask ratio pS = 0.05
-    - Maximum size of time mask = pS * length of utterance
+    Used only for training.
     """
     
     def __init__(
@@ -21,11 +16,10 @@ class SpecAugment(nn.Module):
     ):
         """
         Args:
-            freq_mask_param (int): Maximum number of frequency channels to mask (F=27 is common).
-            num_freq_masks (int): Number of frequency masks to apply (mF in paper).
-            time_mask_ratio (float): Maximum time-mask ratio pS (0.05 is common).
-                Maximum time mask size = pS * utterance_length.
-            num_time_masks (int): Number of time masks to apply (10 is common).
+            freq_mask_param (int): Maximum number of frequency channels to mask.
+            num_freq_masks (int): Number of frequency masks to apply.
+            time_mask_ratio (float): Maximum time-mask ratio pS.
+            num_time_masks (int): Number of time masks to apply.
         """
         super().__init__()
         self.freq_mask_param = freq_mask_param
@@ -43,18 +37,16 @@ class SpecAugment(nn.Module):
         Returns:
             Tensor: Augmented spectrogram of shape [batch, n_feats, time]
         """
-        # don't use for inference
+        # only train
         if not self.training:
             return spectrogram
-        
-        # Work in-place to save memory - modify spectrogram directly
-        # Only clone if we need to preserve gradients (when requires_grad=True)
+
         if spectrogram.requires_grad:
             aug_spec = spectrogram.clone()
         else:
             aug_spec = spectrogram
         
-        batch_size, n_feats, time_steps = aug_spec.shape
+        _, n_feats, time_steps = aug_spec.shape
         
         # processing frequency masking
         for _ in range(self.num_freq_masks):

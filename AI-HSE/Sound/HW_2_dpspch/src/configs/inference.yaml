@@ -1,10 +1,12 @@
 defaults:
-  - model: deep_speech2_small
+  - model: deep_speech2_mini
   - metrics: example
-  - datasets: example # we can use example dataset for inference
+  - datasets: example
   - dataloader: example
   - transforms: example
   - _self_
+text_encoder:
+  _target_: src.text_encoder.CTCTextEncoder
 inferencer:
   device_tensors: ["spectrogram", "text_encoded"] # which tensors should be on device (ex. GPU)
   device: auto # device name or "auto"

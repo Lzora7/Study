@@ -122,7 +122,6 @@ class BaseTrainer:
         self.metrics = metrics
         self.train_metrics = MetricTracker(
             *self.config.writer.loss_names,
-            "grad_norm",
             *[m.name for m in self.metrics["train"]],
             writer=self.writer,
         )
@@ -139,7 +138,14 @@ class BaseTrainer:
         )
 
         if config.trainer.get("resume_from") is not None:
-            resume_path = self.checkpoint_dir / config.trainer.resume_from
+            resume_from = config.trainer.resume_from
+            # try relative to saved/ first (most common case)
+            saved_resume_path = ROOT_PATH / config.trainer.save_dir / resume_from
+            if saved_resume_path.exists():
+                resume_path = saved_resume_path
+            else:
+                # fall back to relative to current checkpoint_dir
+                resume_path = self.checkpoint_dir / resume_from
             self._resume_checkpoint(resume_path)
 
         if config.trainer.get("from_pretrained") is not None:
@@ -234,17 +240,6 @@ class BaseTrainer:
                 else:
                     raise e
 
-            self.train_metrics.update("grad_norm", self._get_grad_norm())
-            
-            # Log detailed gradient statistics periodically (if available in Trainer)
-            if batch_idx % self.log_step == 0:
-                try:
-                    if hasattr(self, '_get_gradient_statistics') and hasattr(self, '_log_gradient_statistics'):
-                        grad_stats = self._get_gradient_statistics()
-                        self._log_gradient_statistics(grad_stats)
-                except Exception as e:
-                    self.logger.debug(f"Could not log gradient statistics: {e}")
-
             # log current results
             if batch_idx % self.log_step == 0:
                 step = (epoch - 1) * self.epoch_len + batch_idx
@@ -291,7 +286,7 @@ class BaseTrainer:
         """
         self.is_train = False
         self.model.eval()
-        # Set batch transforms to eval mode (disable SpecAugment, etc.)
+        # Set batch transforms to eval mode
         if self.batch_transforms is not None:
             train_transforms = self.batch_transforms.get("train")
             if train_transforms is not None:
@@ -309,8 +304,7 @@ class BaseTrainer:
                     batch,
                     metrics=self.evaluation_metrics,
                 )
-            # Use epoch number as step for evaluation metrics
-            # Also log step (total batches) for reference
+            # use epoch number as step for evaluation metrics
             step = epoch * self.epoch_len
             self.writer.set_step(step, part)
             # Log both step and epoch for reference
@@ -321,7 +315,7 @@ class BaseTrainer:
                 batch_idx, batch, part
             )  # log only the last batch during inference
             
-            # Log prediction examples to text logger
+            # log prediction examples to text logger
             if hasattr(self, 'log_prediction_examples'):
                 self.log_prediction_examples(**batch)
 
@@ -551,7 +545,7 @@ class BaseTrainer:
         """
         resume_path = str(resume_path)
         self.logger.info(f"Loading checkpoint: {resume_path} ...")
-        checkpoint = torch.load(resume_path, self.device)
+        checkpoint = torch.load(resume_path, self.device, weights_only=False)
         self.start_epoch = checkpoint["epoch"] + 1
         self.mnt_best = checkpoint["monitor_best"]
 
@@ -597,7 +591,7 @@ class BaseTrainer:
             self.logger.info(f"Loading model weights from: {pretrained_path} ...")
         else:
             print(f"Loading model weights from: {pretrained_path} ...")
-        checkpoint = torch.load(pretrained_path, self.device)
+        checkpoint = torch.load(pretrained_path, self.device, weights_only=False)
 
         if checkpoint.get("state_dict") is not None:
             self.model.load_state_dict(checkpoint["state_dict"])

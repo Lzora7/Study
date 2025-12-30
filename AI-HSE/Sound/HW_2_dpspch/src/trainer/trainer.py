@@ -68,12 +68,6 @@ class Trainer(BaseTrainer):
                         break
             
             if not has_nan_grad:
-                # Log detailed gradient statistics before clipping
-                grad_stats = self._get_gradient_statistics()
-                
-                # Log gradient statistics periodically (use batch_idx from base_trainer)
-                # We'll log in _train_epoch where batch_idx is available
-                
                 self._clip_grad_norm()
                 self.optimizer.step()
             else:
@@ -116,7 +110,7 @@ class Trainer(BaseTrainer):
                 self.log_predictions(**batch)
 
     def log_spectrogram(self, spectrogram, **batch):
-        # Логирование спектрограмм отключено
+        # log turned off
         pass
 
     def log_predictions(
@@ -207,127 +201,3 @@ class Trainer(BaseTrainer):
             self.logger.info(f"    Predict: {pred}")
             self.logger.info(f"    WER: {wer:.2f}%, CER: {cer:.2f}%")
     
-    @torch.no_grad()
-    def _get_gradient_statistics(self):
-        """
-        Collect detailed gradient statistics for all model parameters.
-        
-        Returns:
-            dict: Dictionary with gradient statistics for each parameter
-        """
-        grad_stats = {}
-        zero_grad_count = 0
-        total_params = 0
-        
-        for name, param in self.model.named_parameters():
-            total_params += 1
-            if param.grad is not None:
-                grad = param.grad.data
-                grad_stats[name] = {
-                    'mean': grad.mean().item(),
-                    'std': grad.std().item(),
-                    'max': grad.max().item(),
-                    'min': grad.min().item(),
-                    'abs_mean': grad.abs().mean().item(),
-                    'norm': grad.norm().item(),
-                    'numel': grad.numel(),
-                }
-            else:
-                zero_grad_count += 1
-                grad_stats[name] = {
-                    'mean': 0.0,
-                    'std': 0.0,
-                    'max': 0.0,
-                    'min': 0.0,
-                    'abs_mean': 0.0,
-                    'norm': 0.0,
-                    'numel': 0,
-                    'zero_grad': True
-                }
-        
-        grad_stats['_summary'] = {
-            'zero_grad_count': zero_grad_count,
-            'total_params': total_params,
-            'zero_grad_ratio': zero_grad_count / total_params if total_params > 0 else 0.0
-        }
-        
-        return grad_stats
-    
-    def _log_gradient_statistics(self, grad_stats):
-        """
-        Log gradient statistics to logger and writer.
-        
-        Args:
-            grad_stats (dict): Dictionary with gradient statistics
-        """
-        summary = grad_stats.get('_summary', {})
-        zero_grad_ratio = summary.get('zero_grad_ratio', 0.0)
-        
-        # Log summary
-        self.logger.info(
-            f"Gradient statistics: {summary.get('zero_grad_count', 0)}/{summary.get('total_params', 0)} "
-            f"parameters have zero gradients ({zero_grad_ratio:.1%})"
-        )
-        
-        # Key layers to monitor
-        key_layers = [
-            'conv_layers',
-            'rnn',
-            'output_projection',
-        ]
-        
-        # Collect statistics for key layers
-        key_stats = {}
-        for key in key_layers:
-            for name, stats in grad_stats.items():
-                if name == '_summary':
-                    continue
-                if key in name and not stats.get('zero_grad', False):
-                    key_stats[name] = stats
-                    break
-        
-        # Log key layer statistics
-        if key_stats:
-            self.logger.info("Key layer gradient statistics:")
-            for name, stats in key_stats.items():
-                # Shorten name for readability
-                short_name = name.split('.')[-2:] if '.' in name else [name]
-                short_name = '.'.join(short_name[-2:])
-                
-                self.logger.info(
-                    f"  {short_name}: mean={stats['mean']:.6f}, "
-                    f"std={stats['std']:.6f}, abs_mean={stats['abs_mean']:.6f}, "
-                    f"norm={stats['norm']:.4f}, max={stats['max']:.6f}, min={stats['min']:.6f}"
-                )
-                
-                # Log to writer (CometML) - step is already set in _train_epoch
-                self.writer.add_scalar(f"grad_stats/{short_name}/mean", stats['mean'])
-                self.writer.add_scalar(f"grad_stats/{short_name}/std", stats['std'])
-                self.writer.add_scalar(f"grad_stats/{short_name}/abs_mean", stats['abs_mean'])
-                self.writer.add_scalar(f"grad_stats/{short_name}/norm", stats['norm'])
-                self.writer.add_scalar(f"grad_stats/{short_name}/max", stats['max'])
-                self.writer.add_scalar(f"grad_stats/{short_name}/min", stats['min'])
-        
-        # Log summary statistics
-        if zero_grad_ratio > 0.1:
-            self.logger.warning(
-                f"High ratio of zero gradients: {zero_grad_ratio:.1%}. "
-                f"This may indicate vanishing gradients or incorrect loss computation."
-            )
-        
-        # Log histogram of gradients for key layers (if supported)
-        for name, stats in key_stats.items():
-            if name in grad_stats and not grad_stats[name].get('zero_grad', False):
-                try:
-                    param = dict(self.model.named_parameters())[name]
-                    if param.grad is not None:
-                        # Flatten gradient for histogram
-                        grad_flat = param.grad.data.flatten().cpu()
-                        # Sample if too large (for performance)
-                        if grad_flat.numel() > 10000:
-                            grad_flat = grad_flat[::grad_flat.numel() // 10000]
-                        
-                        short_name = '.'.join(name.split('.')[-2:])
-                        self.writer.add_histogram(f"grad_hist/{short_name}", grad_flat)
-                except Exception as e:
-                    self.logger.debug(f"Could not log gradient histogram for {name}: {e}")

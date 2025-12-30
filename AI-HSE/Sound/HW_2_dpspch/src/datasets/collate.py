@@ -1,4 +1,5 @@
 import torch
+from pathlib import Path
 
 def collate_fn(dataset_items: list[dict]):
     """
@@ -18,6 +19,7 @@ def collate_fn(dataset_items: list[dict]):
     text_list = [item['text'] for item in dataset_items]
     text_enc_list = [item['text_encoded'] for item in dataset_items]
     audio_paths_list = [item['audio_path'] for item in dataset_items]
+    utterance_ids_list = [item.get('utterance_id', Path(item['audio_path']).stem) for item in dataset_items]
 
     # save actual length
     spec_lengths = torch.tensor([spec.shape[-1] for spec in spec_list])
@@ -67,6 +69,7 @@ def collate_fn(dataset_items: list[dict]):
         "text_encoded_length": text_encoded_lengths,  # [batch]
         "text": text_list,  # list of strings
         "audio_path": audio_paths_list,  # list of strings
+        "utterance_id": utterance_ids_list,  # list of utterance IDs
     }
 
     return final_batch 
