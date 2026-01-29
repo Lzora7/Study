@@ -4,13 +4,11 @@ from torch.nn import Sequential
 
 class BaselineModel(nn.Module):
     """
-    Conformer
+    Simple MLP
     """
 
     def __init__(self, n_feats, n_tokens, fc_hidden=512):
         """
-        Full Conformer Encoder
-        
         Args:
             n_feats (int): number of input features.
             n_tokens (int): number of tokens in the vocabulary.
@@ -27,72 +25,6 @@ class BaselineModel(nn.Module):
             nn.Linear(in_features=fc_hidden, out_features=n_tokens),
         )
 
-    def _spec_aug_block(self):
-        '''
-        SpecAug block (first)
-        '''
-
-    def _conv_subsampling_block(self):
-        '''
-        Convolution SubSampling block (second)
-        '''
-
-    def _conformer_block(self):
-        '''
-        Conformer block
-
-        '''
-
-    def __ffn_module(self):
-        '''
-        FFN module in Conformer Block
-        '''
-        res_connection = ...
-
-        nn.LayerNorm
-        nn.Linear
-        nn.SiLU()
-        nn.Dropout
-        nn.Linear
-        nn.Dropout
-
-        out = ... + res_connection
-
-        return out
-
-    def __mhsa_module(self):
-        '''
-        Multi-Head Self Attention Module in Conformer Block
-        '''
-        res_connection = ...
-
-        nn.LayerNorm
-        nn.MultiheadAttention
-        nn.Dropout
-
-        out = ... + res_connection
-
-        return out
-
-    def __conv_module(self):
-        '''
-        Convolution Module in Conformer Block
-        '''   
-        res_connection = ...
-
-        nn.LayerNorm
-        nn.Conv1d(kernel_size=1) # pointwise conv ?
-        nn.GLU()
-        nn.Conv1d(kernel_size=1) # 1d depthwise conv
-        nn.BatchNorm1d
-        nn.SiLU()
-        nn.Conv1d(kernel_size=1) # pointwise conv ?
-        nn.Dropout
-
-        out = ... + res_connection
-
-        return out
-        
     def forward(self, spectrogram, spectrogram_length, **batch):
         """
         Model forward method.
