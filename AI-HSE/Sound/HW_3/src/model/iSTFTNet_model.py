@@ -1,7 +1,7 @@
 import torch
 from torch import nn
-import torch.nn.functional as F
-from blocks import ResBlock, UpsampleNet
+from .blocks.ResBlock import ResBlock
+from .blocks.UpsampleNet import UpsampleNet
 
 class iSTFTNET_model(nn.Module):
     """
@@ -12,20 +12,25 @@ class iSTFTNET_model(nn.Module):
     - I: iSTFT
     """
 
-    def __init__(self, in_channels=80, n_features=512, n_fft=16, hop_length=256, win_length=1024):
+    def __init__(self, in_channels=80, n_features=512, n_fft=16, hop_length=None, win_length=None):
         """
         Args:
             in_channels (int): number of input mel-spectrogram channels (usually 80)
             n_features (int): number of hidden features (usually 512)
             n_fft (int): FFT size for iSTFT (usually 16)
-            hop_length (int): hop length for iSTFT
-            win_length (int): window length for iSTFT
+            hop_length (int): hop length for iSTFT (default: n_fft // 4)
+            win_length (int): window length for iSTFT (default: n_fft)
         """
         super().__init__()
         
         self.n_fft = n_fft
-        self.hop_length = hop_length
-        self.win_length = win_length
+        # Set default values if not provided
+        self.hop_length = hop_length if hop_length is not None else n_fft // 4
+        self.win_length = win_length if win_length is not None else n_fft
+        
+        # Ensure win_length <= n_fft
+        if self.win_length > self.n_fft:
+            self.win_length = self.n_fft
         
         # input Conv (mel-spectrogram -> features)
         self.InputConv = nn.Conv1d(
@@ -117,7 +122,7 @@ class iSTFTNET_model(nn.Module):
             center=True,
             normalized=False,
             onesided=True,
-            length=None  # Let it compute automatically
+            length=None
         )
 
         return waveform

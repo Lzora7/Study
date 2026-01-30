@@ -23,8 +23,8 @@ class ResBlock(nn.Module):
         self.conv_block_2 = ConvBlock(ch=ch, kernel_sizes=kernel_sizes, dilations=dilations)
         self.conv_block_3 = ConvBlock(ch=ch, kernel_sizes=kernel_sizes, dilations=dilations)
         
-        # MRF feature extraction
-        self.mrf_extraction = nn.Conv1d(ch*3, ch, kernel_size=1)
+        # MRF feature extraction (with weight_norm applied to the layer)
+        self.mrf_extraction = weight_norm(nn.Conv1d(ch*3, ch, kernel_size=1))
 
     def forward(self, mel_spec, **batch):
         """
@@ -44,10 +44,9 @@ class ResBlock(nn.Module):
         f_concat = torch.cat([f1, f2, f3], dim=1)  # [B, 3*C, T]
 
         # MRF extraction
-        mrf = weight_norm(self.mrf_extraction(f_concat))  # [B, C, T]
+        mrf = self.mrf_extraction(f_concat)  # [B, C, T]
         mrf = F.leaky_relu(mrf, 0.1)
 
-        # Residual connection
         return mrf + mel_spec
 
 

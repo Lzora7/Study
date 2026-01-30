@@ -20,7 +20,7 @@ class ConvBlock(nn.Module):
             ch, 
             ch*2, 
             kernel_size=kernel_sizes[0], 
-            dilations=dilations[0], 
+            dilation=dilations[0], 
             padding=(kernel_sizes[0]-1)*dilations[0]//2
         )
         # keep size
@@ -28,7 +28,7 @@ class ConvBlock(nn.Module):
             ch*2, 
             ch*2, 
             kernel_size=kernel_sizes[1], 
-            dilations=dilations[1],
+            dilation=dilations[1],
             padding=(kernel_sizes[1]-1)*dilations[1]//2
         )
         # small size
@@ -36,7 +36,7 @@ class ConvBlock(nn.Module):
             ch*2, 
             ch, 
             kernel_size=kernel_sizes[2], 
-            dilations=dilations[2],
+            dilation=dilations[2],
             padding=(kernel_sizes[2]-1)*dilations[2]//2
         )
         self.LeakyRelu = nn.LeakyReLU(0.1)
