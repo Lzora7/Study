@@ -3,22 +3,45 @@ from torch import nn
 
 class ConvBlock(nn.Module):
     """
-    Residual Block - upsampling time, extracting features (MRF)
+    Сonvolutional Block
     """
 
-    def __init__(self, upsample_coef=8, kernel=..., dilations=...):
+    def __init__(self, ch, kernel_sizes, dilations):
         """
         Args:
-            upsample_coef (int): coefficient of upsampling time.
-            kernel (int): size of conv kernel.
-            dilations (List[int]): list of dilations for sequence of conv blocks.
+            ch (int): input channels.
+            kernel_sizes (List[int]): list of kernel sizes to use for each Conv.
+            dilations (List[int]): list of dilations for each Conv.
         """
         super().__init__()
-
         
-        self.conv_fusion = nn.Conv1d(ch*3, ch, 1)
+        # add size
+        self.Conv1 = nn.Conv1d(
+            ch, 
+            ch*2, 
+            kernel_size=kernel_sizes[0], 
+            dilations=dilations[0], 
+            padding=(kernel_sizes[0]-1)*dilations[0]//2
+        )
+        # keep size
+        self.Conv2 = nn.Conv1d(
+            ch*2, 
+            ch*2, 
+            kernel_size=kernel_sizes[1], 
+            dilations=dilations[1],
+            padding=(kernel_sizes[1]-1)*dilations[1]//2
+        )
+        # small size
+        self.Conv3 = nn.Conv1d(
+            ch*2, 
+            ch, 
+            kernel_size=kernel_sizes[2], 
+            dilations=dilations[2],
+            padding=(kernel_sizes[2]-1)*dilations[2]//2
+        )
+        self.LeakyRelu = nn.LeakyReLU(0.1)
 
-    def forward(self, spectrogram, spectrogram_length, **batch):
+    def forward(self, mel_spec, **batch):
         """
         Model forward method.
 
@@ -29,10 +52,13 @@ class ConvBlock(nn.Module):
             output (dict): output dict containing log_probs and
                 transformed lengths.
         """
-        output = self.net(spectrogram.transpose(1, 2))
-        log_probs = nn.functional.log_softmax(output, dim=-1)
-        log_probs_length = self.transform_input_lengths(spectrogram_length)
-        return {"log_probs": log_probs, "log_probs_length": log_probs_length}
+        out = self.Conv1(mel_spec)
+        out = self.LeakyRelu(out)
+        out = self.Conv2(out)
+        out = self.LeakyRelu(out)
+        out = self.Conv3(out)   
+
+        return out
 
     def transform_input_lengths(self, input_lengths):
         """
