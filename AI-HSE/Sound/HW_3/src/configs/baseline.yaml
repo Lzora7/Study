@@ -1,35 +1,55 @@
+# Vocoder (iSTFTNet) training config
 defaults:
-  - model: baseline
+  - model: istftnet
   - writer: wandb
   - metrics: example
-  - datasets: example
+  - datasets: ruslan
   - dataloader: example
   - transforms: example_only_instance
   - _self_
-optimizer:
+
+discriminator:
+  _target_: src.model.HiFiGANDiscriminator
+  periods: [2, 3, 5, 7, 11]
+
+# generator optimizer
+optimizer_g:
   _target_: torch.optim.AdamW
-  lr: 3e-4
-lr_scheduler:
-  _target_: torch.optim.lr_scheduler.OneCycleLR
-  max_lr: 1e-2
-  pct_start: 0.1
-  steps_per_epoch: ${trainer.epoch_len}
-  epochs: ${trainer.n_epochs}
-  anneal_strategy: cos
+  lr: 2e-4
+
+# discriminator optimizer
+optimizer_d:
+  _target_: torch.optim.AdamW
+  lr: 2e-4
+
+lr_scheduler_g: null
+lr_scheduler_d: null
+
 loss_function:
-  _target_: src.loss.CTCLossWrapper
-text_encoder:
-  _target_: src.text_encoder.CTCTextEncoder
+  _target_: src.loss.iSTFTLoss
+  sample_rate: 22050
+  n_fft: 1024
+  win_length: 1024
+  hop_length: 256
+  n_mels: 80
+  f_min: 0.0
+  f_max: 11025
+  mel_loss_weight: 45.0
+  adv_loss_weight: 1.0
+  fm_loss_weight: 2.0
+
 trainer:
   log_step: 50
-  n_epochs: 50
-  epoch_len: 200
-  device_tensors: ["spectrogram", "text_encoded"] # which tensors should be on device (ex. GPU)
-  resume_from: null # null or path to the checkpoint dir with *.pth and config.yaml
-  device: auto # device name or "auto"
-  override: False # if True, will override the previous run with the same name
-  monitor: "min val_WER_(Argmax)" # "off" or "max/min metric_name", i.e. our goal is to maximize/minimize metric
-  save_period: 5 # checkpoint each save_period epochs in addition to the best epoch
-  early_stop: ${trainer.n_epochs} # epochs for early stopping
+  n_epochs: 500
+  epoch_len: null
+  device_tensors: ["mel_spec", "audio"]
+  resume_from: null
+  device: auto
+  override: false
+  monitor: "min val_loss"
+  save_period: 10
+  early_stop: ${trainer.n_epochs}
   save_dir: "saved"
   seed: 1
+  max_grad_norm: 1.0 
+  max_grad_norm_d: 1.0   # clip

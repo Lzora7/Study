@@ -1,15 +1,17 @@
-from src.model.baseline_model import BaselineModel
-from src.model.discriminator import (
-    HiFiGANDiscriminator,
+from src.model.discriminator import HiFiGANDiscriminator
+from src.model.dis_blocks.MultiPeriodDiscriminator import (
     MultiPeriodDiscriminator,
-    MultiScaleDiscriminator,
     PeriodDiscriminator,
+)
+from src.model.dis_blocks.MultiScaleDiscriminator import (
+    MultiScaleDiscriminator,
     ScaleDiscriminator,
 )
+from src.model.iSTFTNet_model import iSTFTNET_model
 
 __all__ = [
-    "BaselineModel",
     "HiFiGANDiscriminator",
+    "iSTFTNET_model",
     "MultiPeriodDiscriminator",
     "MultiScaleDiscriminator",
     "PeriodDiscriminator",

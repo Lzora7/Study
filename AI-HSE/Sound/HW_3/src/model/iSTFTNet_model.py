@@ -24,11 +24,12 @@ class iSTFTNET_model(nn.Module):
         super().__init__()
         
         self.n_fft = n_fft
-        # Set default values if not provided
+
+        # default values
         self.hop_length = hop_length if hop_length is not None else n_fft // 4
         self.win_length = win_length if win_length is not None else n_fft
         
-        # Ensure win_length <= n_fft
+        # ensure win_length <= n_fft
         if self.win_length > self.n_fft:
             self.win_length = self.n_fft
         
@@ -102,7 +103,8 @@ class iSTFTNET_model(nn.Module):
         
         # split into magnitude and phase
         n_bins = self.n_fft // 2 + 1
-        magnitude = torch.exp(out[:, :n_bins])  # [B, n_bins, 8*T]
+        log_mag = torch.clamp(out[:, :n_bins], -20.0, 20.0)
+        magnitude = torch.exp(log_mag)  # [B, n_bins, 8*T]
         phase = out[:, n_bins:]  # [B, n_bins, 8*T]
         
         # convert phase to real and imaginary parts

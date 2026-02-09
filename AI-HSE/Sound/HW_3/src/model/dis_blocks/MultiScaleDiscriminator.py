@@ -10,11 +10,11 @@ class ScaleDiscriminator(nn.Module):
     def __init__(self):
         super().__init__()
         
-        # Stack of convolutions
+        # stack of convs
         layers = []
         in_channels = 1
         
-        # Multiple conv layers with increasing channels
+        # multiple conv layers with increasing channels
         for i in range(4):
             out_channels = min(1024, 2 ** (i + 2))
             layers.append(
@@ -30,7 +30,7 @@ class ScaleDiscriminator(nn.Module):
             )
             layers.append(nn.LeakyReLU(0.1))
             
-            # Downsample
+            # downsample
             layers.append(
                 weight_norm(
                     nn.Conv1d(
@@ -46,7 +46,7 @@ class ScaleDiscriminator(nn.Module):
             layers.append(nn.LeakyReLU(0.1))
             in_channels = out_channels
         
-        # Final conv layer
+        # final conv layer
         layers.append(
             weight_norm(
                 nn.Conv1d(
@@ -67,7 +67,7 @@ class ScaleDiscriminator(nn.Module):
             x (Tensor): Input waveform [B, 1, T]
         Returns:
             output (Tensor): Discriminator output [B, 1, T']
-            features (list): List of intermediate features for feature matching
+            features (list): List of features for feature matching
         """
         features = []
         for i, layer in enumerate(self.convs[:-1]):
@@ -103,17 +103,17 @@ class MultiScaleDiscriminator(nn.Module):
             x (Tensor): Input waveform [B, 1, T]
         Returns:
             outputs (list): List of discriminator outputs at different scales
-            all_features (list): List of all features from all discriminators
+            all_features (list): List of all features
         """
         outputs = []
         all_features = []
         
-        # Original scale
+        # original scale
         output, features = self.discriminators[0](x)
         outputs.append(output)
         all_features.extend(features)
         
-        # Downsampled scales (cascade: each scale is pooled from the previous)
+        # downsampled scales
         x_cur = x
         for i, pool in enumerate(self.pooling):
             x_cur = pool(x_cur)

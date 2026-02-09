@@ -59,12 +59,12 @@ class iSTFTLoss(Module):
         self.f_max = f_max if f_max is not None else sample_rate // 2
         self.mel_loss_type = mel_loss_type
         
-        # Loss weights
+        # loss weights
         self.mel_loss_weight = mel_loss_weight
         self.adv_loss_weight = adv_loss_weight
         self.fm_loss_weight = fm_loss_weight
         
-        # Create mel-spectrogram transform
+        # set mel-spec transform
         self.mel_transform = torchaudio.transforms.MelSpectrogram(
             sample_rate=sample_rate,
             n_fft=n_fft,
@@ -85,26 +85,28 @@ class iSTFTLoss(Module):
         **batch
     ) -> dict:
         """
-        Generator loss L_G: mel + adversarial (LSGAN) + feature matching.
+        Generator loss: mel + LSGAN + feature matching.
 
         Args:
             waveform_pred (Tensor): Predicted waveform [B, L]
             waveform_target (Tensor): Target waveform [B, L]
             discriminator_outputs (list of Tensor, optional): List of outputs from all
                 sub-discriminators (MPD + MSD) for predicted waveform. Each can be [B, 1, T'] or [B, N].
-            discriminator_features_pred (list, optional): List of intermediate features for predicted waveform
-            discriminator_features_target (list, optional): List of intermediate features for target waveform
-            **batch: Additional batch data
+            discriminator_features_pred (list, optional): List of features for predicted waveform
+            discriminator_features_target (list, optional): List of features for target waveform
 
         Returns:
             dict: loss, mel_loss, adv_loss (if used), fm_loss (if used)
         """
-        # Ensure waveforms have the same length
+        # make sure waveforms have the same length
         min_length = min(waveform_pred.shape[-1], waveform_target.shape[-1])
         waveform_pred = waveform_pred[..., :min_length]
         waveform_target = waveform_target[..., :min_length]
+        
+        # сlamp waveform_pred 
+        waveform_pred = torch.clamp(waveform_pred, -1.0, 1.0)
 
-        # 1. Mel-spectrogram loss (as in HiFi-GAN / iSTFTNet)
+        # 1. Mel-spec loss
         mel_pred = self.mel_transform(waveform_pred)  # [B, n_mels, T]
         mel_target = self.mel_transform(waveform_target)
         mel_pred_log = torch.log(mel_pred + 1e-5)
@@ -114,21 +116,22 @@ class iSTFTLoss(Module):
         elif self.mel_loss_type == "l2":
             mel_loss = F.mse_loss(mel_pred_log, mel_target_log)
         else:
-            raise ValueError(f"Unknown mel_loss_type: {self.mel_loss_type}. Use 'l1' or 'l2'")
+            raise ValueError(f"Unknown mel_loss_type: {self.mel_loss_type}")
 
         total_loss = self.mel_loss_weight * mel_loss
         losses = {"mel_loss": mel_loss}
 
-        # 2. Adversarial loss (LSGAN): sum over all sub-discriminators of E[(1 - D(y_hat))^2]
+        # 2. LSGAN: sum over all sub-discriminators
         if discriminator_outputs is not None and self.adv_loss_weight > 0:
             adv_loss = torch.tensor(0.0, device=waveform_pred.device, dtype=waveform_pred.dtype)
             for dg in discriminator_outputs:
                 dg_flat = dg.reshape(dg.size(0), -1)
+                # E[(1 - D(y_hat))^2]
                 adv_loss += torch.mean((1 - dg_flat) ** 2)
             total_loss += self.adv_loss_weight * adv_loss
             losses["adv_loss"] = adv_loss
 
-        # 3. Feature matching: 2 * sum over all layers of E[|f_real - f_fake|] (as in HiFi-GAN)
+        # 3. Feature matching: 2 * sum over all layers of 
         if (
             discriminator_features_pred is not None
             and discriminator_features_target is not None
@@ -139,11 +142,14 @@ class iSTFTLoss(Module):
                 discriminator_features_pred, discriminator_features_target
             ):
                 if feat_pred.shape != feat_target.shape:
+                    # different shape
                     min_shape = tuple(
                         min(sp, st) for sp, st in zip(feat_pred.shape, feat_target.shape)
                     )
                     feat_pred = feat_pred[tuple(slice(0, s) for s in min_shape)]
                     feat_target = feat_target[tuple(slice(0, s) for s in min_shape)]
+
+                # E[|f_real - f_fake|]
                 fm_loss += torch.mean(torch.abs(feat_pred - feat_target))
             fm_loss = fm_loss * 2
             total_loss += self.fm_loss_weight * fm_loss
@@ -158,7 +164,7 @@ class iSTFTLoss(Module):
         disc_pred_outputs: List[Tensor],
     ) -> Tuple[Tensor, List[float], List[float]]:
         """
-        Discriminator loss L_D (LSGAN): sum over all sub-D of E[(1-D(y))^2] + E[D(y_hat)^2].
+        Discriminator loss (LSGAN): sum over all sub-D
 
         Args:
             disc_real_outputs (list of Tensor): Outputs of all sub-D on real waveform
@@ -173,6 +179,7 @@ class iSTFTLoss(Module):
         r_losses = []
         g_losses = []
         for dr, dg in zip(disc_real_outputs, disc_pred_outputs):
+            # E[(1-D(y))^2] + E[D(y_hat)^2].
             dr_flat = dr.reshape(dr.size(0), -1)
             dg_flat = dg.reshape(dg.size(0), -1)
             r_loss = torch.mean((1 - dr_flat) ** 2)
@@ -180,4 +187,5 @@ class iSTFTLoss(Module):
             loss = loss + r_loss + g_loss
             r_losses.append(r_loss.item())
             g_losses.append(g_loss.item())
+
         return loss, r_losses, g_losses

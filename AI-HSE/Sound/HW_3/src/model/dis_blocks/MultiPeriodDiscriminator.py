@@ -12,17 +12,17 @@ class PeriodDiscriminator(nn.Module):
         """
         Args:
             period (int): Period to check (e.g., 2, 3, 5, 7, 11)
-            kernel_size (int): Kernel size for convolutions
-            stride (int): Stride for convolutions
+            kernel_size (int): Kernel size for conv
+            stride (int): Stride for conv
         """
         super().__init__()
         self.period = period
         
-        # Stack of convolutions
+        # stack of convs
         layers = []
         in_channels = 1
         
-        # Multiple conv layers with increasing channels
+        # multiple conv layers with increasing channels
         for i in range(4):
             out_channels = min(1024, 2 ** (i + 2))
             layers.append(
@@ -39,7 +39,7 @@ class PeriodDiscriminator(nn.Module):
             layers.append(nn.LeakyReLU(0.1))
             in_channels = out_channels
         
-        # Final conv layer
+        # final conv layer
         layers.append(
             weight_norm(
                 nn.Conv2d(
@@ -59,9 +59,9 @@ class PeriodDiscriminator(nn.Module):
             x (Tensor): Input waveform [B, 1, T]
         Returns:
             output (Tensor): Discriminator output [B, 1, T']
-            features (list): List of intermediate features for feature matching
+            features (list): List of features for feature matching
         """
-        # Reshape to [B, 1, period, T//period]
+        # reshape to [B, 1, period, T//period]
         length = x.shape[-1]
         if length % self.period != 0:
             pad_len = self.period - (length % self.period)
@@ -76,10 +76,10 @@ class PeriodDiscriminator(nn.Module):
             if isinstance(layer, nn.LeakyReLU):
                 features.append(x)
         
-        # Final layer
+        # final layer
         x = self.convs[-1](x)
         
-        # Reshape back to [B, 1, T']
+        # reshape back to [B, 1, T']
         x = x.view(batch_size, 1, -1)
         
         return x, features
@@ -107,7 +107,7 @@ class MultiPeriodDiscriminator(nn.Module):
             x (Tensor): Input waveform [B, 1, T]
         Returns:
             outputs (list): List of discriminator outputs
-            all_features (list): List of all features from all discriminators
+            all_features (list): List of all features
         """
         outputs = []
         all_features = []

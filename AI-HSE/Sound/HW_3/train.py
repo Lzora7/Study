@@ -6,7 +6,7 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
 from src.datasets.data_utils import get_dataloaders
-from src.trainer import Trainer
+from src.trainer import GANTrainer
 from src.utils.init_utils import set_random_seed, setup_saving_and_logging
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -15,10 +15,8 @@ warnings.filterwarnings("ignore", category=UserWarning)
 @hydra.main(version_base=None, config_path="src/configs", config_name="baseline")
 def main(config):
     """
-    Main script for training. Instantiates the model, optimizer, scheduler,
-    metrics, logger, writer, and dataloaders. Runs Trainer to train and
-    evaluate the model.
-
+    Training script for iSTFTNet vocoder with discriminator (GAN training).
+    
     Args:
         config (DictConfig): hydra experiment config.
     """
@@ -33,44 +31,58 @@ def main(config):
     else:
         device = config.trainer.device
 
-    # setup text_encoder
-    text_encoder = instantiate(config.text_encoder)
-
     # setup data_loader instances
-    # batch_transforms should be put on device
-    dataloaders, batch_transforms = get_dataloaders(config, text_encoder, device)
+    dataloaders, batch_transforms = get_dataloaders(config, text_encoder=None, device=device)
 
-    # build model architecture, then print to console
-    model = instantiate(config.model, n_tokens=len(text_encoder)).to(device)
-    logger.info(model)
+    # SETUP
 
-    # get function handles of loss and metrics
-    loss_function = instantiate(config.loss_function).to(device)
+    # generator
+    generator = instantiate(config.model).to(device)
+    logger.info("Generator:")
+    logger.info(generator)
 
+    # discriminator
+    discriminator = instantiate(config.discriminator).to(device)
+    logger.info("Discriminator:")
+    logger.info(discriminator)
+
+    # loss
+    criterion = instantiate(config.loss_function).to(device)
+    logger.info(f"Loss function: {type(criterion).__name__}")
+
+    # metrics (may be empty for vocoder, no text_encoder needed)
     metrics = {"train": [], "inference": []}
     for metric_type in ["train", "inference"]:
         for metric_config in config.metrics.get(metric_type, []):
-            # use text_encoder in metrics
-            metrics[metric_type].append(
-                instantiate(metric_config, text_encoder=text_encoder)
-            )
+            metrics[metric_type].append(instantiate(metric_config))
 
-    # build optimizer, learning rate scheduler
-    trainable_params = filter(lambda p: p.requires_grad, model.parameters())
-    optimizer = instantiate(config.optimizer, params=trainable_params)
-    lr_scheduler = instantiate(config.lr_scheduler, optimizer=optimizer)
+    # optimizers (gen, dis)
+    generator_params = filter(lambda p: p.requires_grad, generator.parameters())
+    discriminator_params = filter(lambda p: p.requires_grad, discriminator.parameters())
+    
+    optimizer_g = instantiate(config.optimizer_g, params=generator_params)
+    optimizer_d = instantiate(config.optimizer_d, params=discriminator_params)
+    
+    logger.info(f"Generator optimizer: {type(optimizer_g).__name__}")
+    logger.info(f"Discriminator optimizer: {type(optimizer_d).__name__}")
 
-    # epoch_len = number of iterations for iteration-based training
-    # epoch_len = None or len(dataloader) for epoch-based training
+    # (opt) learning rate schedulers
+    lr_scheduler_g = instantiate(config.get("lr_scheduler_g"), optimizer=optimizer_g) if config.get("lr_scheduler_g") else None
+    lr_scheduler_d = instantiate(config.get("lr_scheduler_d"), optimizer=optimizer_d) if config.get("lr_scheduler_d") else None
+
+    # epoch_len
     epoch_len = config.trainer.get("epoch_len")
 
-    trainer = Trainer(
-        model=model,
-        criterion=loss_function,
+    trainer = GANTrainer(
+        model=generator,
+        discriminator=discriminator,
+        criterion=criterion,
         metrics=metrics,
-        optimizer=optimizer,
-        lr_scheduler=lr_scheduler,
-        text_encoder=text_encoder,
+        optimizer_g=optimizer_g,
+        optimizer_d=optimizer_d,
+        lr_scheduler_g=lr_scheduler_g,
+        lr_scheduler_d=lr_scheduler_d,
+        text_encoder=None,
         config=config,
         device=device,
         dataloaders=dataloaders,

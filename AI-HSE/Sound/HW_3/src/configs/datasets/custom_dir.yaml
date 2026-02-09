@@ -1,0 +1,43 @@
+train:
+  _target_: src.datasets.custom_dir_dataset.CustomDirDataset
+  root_dir: null  # example data/datasets/my_custom
+  target_sr: 22050
+  mel_config:
+    _target_: src.transforms.mel_spectrogram.MelSpectrogramConfig
+    sr: 22050
+    win_length: 1024
+    hop_length: 256
+    n_fft: 1024
+    f_min: 0
+    f_max: 11025
+    n_mels: 80
+    power: 2.0
+    pad_value: -11.5129251
+  limit: null
+  max_audio_length: null
+  shuffle_index: true
+  train: true
+  train_ratio: 0.9
+  seed: 42
+
+test:
+  _target_: src.datasets.custom_dir_dataset.CustomDirDataset
+  root_dir: null
+  target_sr: 22050
+  mel_config:
+    _target_: src.transforms.mel_spectrogram.MelSpectrogramConfig
+    sr: 22050
+    win_length: 1024
+    hop_length: 256
+    n_fft: 1024
+    f_min: 0
+    f_max: 11025
+    n_mels: 80
+    power: 2.0
+    pad_value: -11.5129251
+  limit: null
+  max_audio_length: null
+  shuffle_index: false
+  train: false
+  train_ratio: 0.9
+  seed: 42

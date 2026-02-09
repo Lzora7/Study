@@ -22,7 +22,6 @@ class BaseTrainer:
         metrics,
         optimizer,
         lr_scheduler,
-        text_encoder,
         config,
         device,
         dataloaders,
@@ -31,6 +30,7 @@ class BaseTrainer:
         epoch_len=None,
         skip_oom=True,
         batch_transforms=None,
+        text_encoder=None,
     ):
         """
         Args:
@@ -42,7 +42,7 @@ class BaseTrainer:
             optimizer (Optimizer): optimizer for the model.
             lr_scheduler (LRScheduler): learning rate scheduler for the
                 optimizer.
-            text_encoder (CTCTextEncoder): text encoder.
+            text_encoder: optional text encoder (e.g. for ASR; None for vocoder).
             config (DictConfig): experiment config containing training config.
             device (str): device for tensors and model.
             dataloaders (dict[DataLoader]): dataloaders for different
@@ -76,13 +76,17 @@ class BaseTrainer:
         self.batch_transforms = batch_transforms
 
         # define dataloaders
-        self.train_dataloader = dataloaders["train"]
+        self.train_dataloader = dataloaders.get("train")
         if epoch_len is None:
             # epoch-based training
-            self.epoch_len = len(self.train_dataloader)
+            if self.train_dataloader is not None:
+                self.epoch_len = len(self.train_dataloader)
+            else:
+                self.epoch_len = 1
         else:
             # iteration-based training
-            self.train_dataloader = inf_loop(self.train_dataloader)
+            if self.train_dataloader is not None:
+                self.train_dataloader = inf_loop(self.train_dataloader)
             self.epoch_len = epoch_len
 
         self.evaluation_dataloaders = {
@@ -353,8 +357,8 @@ class BaseTrainer:
 
     def transform_batch(self, batch):
         """
-        Transforms elements in batch. Like instance transform inside the
-        BaseDataset class, but for the whole batch. Improves pipeline speed,
+        Transforms elements in batch.         Like instance transform inside the
+        dataset class, but for the whole batch. Improves pipeline speed,
         especially if used with a GPU.
 
         Each tensor in a batch undergoes its own transform defined by the key.
@@ -367,6 +371,8 @@ class BaseTrainer:
                 the dataloader (possibly transformed via batch transform).
         """
         # do batch transforms on device
+        if self.batch_transforms is None:
+            return batch
         transform_type = "train" if self.is_train else "inference"
         transforms = self.batch_transforms.get(transform_type)
         if transforms is not None:
