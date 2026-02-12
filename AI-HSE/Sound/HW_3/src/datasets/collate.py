@@ -16,7 +16,6 @@ def collate_fn(dataset_items: list[dict]):
         result_batch (dict[Tensor]): dict, containing batch-version
             of the tensors.
     """
-    # Check if this is a vocoder dataset (has waveform and mel_spec)
     if "waveform" in dataset_items[0] and "mel_spec" in dataset_items[0]:
         return _collate_vocoder(dataset_items)
 
@@ -28,11 +27,11 @@ def _collate_vocoder(dataset_items: list[dict]):
     """
     batch_size = len(dataset_items)
     
-    # Get waveforms and mel-spectrograms
+    # get waveforms and mel-spectrograms
     waveforms = [item["waveform"] for item in dataset_items]  # each is [T]
     mel_specs = [item["mel_spec"] for item in dataset_items]  # each is [n_mels, T']
     
-    # Find max lengths
+    # find max lengths
     max_waveform_len = max(w.shape[0] for w in waveforms)
     max_mel_len = max(m.shape[-1] for m in mel_specs)
     
@@ -45,7 +44,7 @@ def _collate_vocoder(dataset_items: list[dict]):
         padded_waveforms.append(w)
     waveforms_batch = torch.stack(padded_waveforms)  # [B, T]
     
-    # Pad mel-spectrograms (last dim)
+    # pad mel-spectrograms (last dim)
     padded_mel_specs = []
     for m in mel_specs:
         pad_len = max_mel_len - m.shape[-1]
@@ -57,22 +56,9 @@ def _collate_vocoder(dataset_items: list[dict]):
     if mel_specs_batch.dim() == 4:
         mel_specs_batch = mel_specs_batch.squeeze(1)  # [B, n_mels, T']
     
-    # Collect other fields
     result_batch = {
         "waveform": waveforms_batch,  # [B, T]
         "mel_spec": mel_specs_batch,  # [B, n_mels, T']
+        "audio": waveforms_batch,     
     }
-    
-    # Add audio_path if present
-    if "audio_path" in dataset_items[0]:
-        result_batch["audio_path"] = [item["audio_path"] for item in dataset_items]
-    
-    # Add text if present (RUSLAN: текст из папки text по соответствующему индексу)
-    if "text" in dataset_items[0]:
-        result_batch["text"] = [item["text"] for item in dataset_items]
-    
-    # For compatibility with trainer, also add aliases
-    result_batch["audio"] = waveforms_batch
-    result_batch["spectrogram"] = mel_specs_batch
-    
     return result_batch

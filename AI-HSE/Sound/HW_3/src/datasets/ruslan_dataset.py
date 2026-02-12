@@ -14,47 +14,22 @@ from src.utils.io_utils import ROOT_PATH
 
 logger = logging.getLogger(__name__)
 
-# RUSLAN dataset Google Drive (folder and single-file IDs)
 RUSLAN_DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/1QjaIKtPHmj-baiUMjjQqe8XjZ5XpiNoC"
 RUSLAN_TAR_GZ_FILE_ID = "1Ye9IqnOvCjDc8NdMQol-bu-gWJGJjbB1"
 RUSLAN_METADATA_CSV_FILE_ID = "11TD_ZwIOo-Wo75GYv-OWWOS3ABmwmAdK"
 
-
-def _parse_ruslan_csv(csv_path: Path) -> dict:
-    """
-    Parsing CSV format id|text
-
-    Return:
-         dict id -> text.
-    """
-    id_to_text = {}
-    with open(csv_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            parts = line.split("|", 1)
-            if len(parts) >= 2:
-                id_to_text[parts[0].strip()] = parts[1].strip()
-    return id_to_text
-
-
 class RUSLANDataset(Dataset):
     """
     RUSLAN dataset for vocoder training.
-    Audio Speech - audio/
-    Text of speech - text/
-    
+    Audio only: audio/
+
     Structure:
     ruslan/
     ├── audio/
     │   ├── 001.wav, 002.wav, ...
     │   └── ...
-    └── text/
-        ├── 001.txt, 002.txt, ... 
-        └── ...
     """
-    
+
     def __init__(
         self,
         audio_dir: str,
@@ -73,7 +48,7 @@ class RUSLANDataset(Dataset):
         """
         Args:
             audio_dir (str): Path to directory with audio files (wav)
-            text_dir (str | None): Path to directory with text files (.txt). If None, uses audio_dir.parent / "text"
+            text_dir (str | None): Kept for backward compatibility, but not used.
             target_sr (int): Target sample rate (default 22050)
             mel_config (MelSpectrogramConfig): Configuration for mel-spectrogram extraction.
                 If None, uses default config.
@@ -87,11 +62,7 @@ class RUSLANDataset(Dataset):
             data_dir (str | None): Base directory for dataset. If None, uses ROOT_PATH/data/datasets/ruslan
         """
         audio_dir = Path(audio_dir)
-        if text_dir is None:
-            text_dir = audio_dir.parent / "text"
-        else:
-            text_dir = Path(text_dir)
-        
+
         # automatic download
         if not audio_dir.exists():
             if download:
@@ -101,20 +72,19 @@ class RUSLANDataset(Dataset):
             else:
                 raise ValueError(
                     f"Audio directory does not exist: {audio_dir}\n"
-                    f"To automatically download RUSLAN, set download=True in config.\n"
                 )
-        
+
         # find all audio files
         audio_files = []
         for ext in [".wav", ".flac", ".mp3", ".m4a"]:
             audio_files.extend(list(audio_dir.glob(f"*{ext}")))
             audio_files.extend(list(audio_dir.glob(f"**/*{ext}")))
-        
+
         if len(audio_files) == 0:
             raise ValueError(f"No audio files found in {audio_dir}")
-        
+
         logger.info(f"Found {len(audio_files)} audio files in {audio_dir}")
-        
+
         # build index
         index = []
         for audio_path in audio_files:
@@ -124,21 +94,14 @@ class RUSLANDataset(Dataset):
                 info = torchaudio.info(str(audio_path))
                 duration = info.num_frames / info.sample_rate
                 entry = {"path": str(audio_path), "audio_len": duration}
-                # text by same index
-                text_path = text_dir / (audio_path.stem + ".txt")
-                if text_path.exists():
-                    with open(text_path, "r", encoding="utf-8") as f:
-                        entry["text"] = f.read().strip()
-                else:
-                    entry["text"] = ""
                 index.append(entry)
             except Exception as e:
                 logger.warning(f"Failed to load {audio_path}: {e}")
                 continue
-        
+
         if len(index) == 0:
             raise ValueError("No valid audio files found")
-        
+
         # filter by max_audio_length
         if max_audio_length is not None:
             initial_size = len(index)
@@ -148,35 +111,35 @@ class RUSLANDataset(Dataset):
                 f"Filtered {filtered} ({filtered / initial_size:.1%}) records longer than "
                 f"{max_audio_length} seconds"
             )
-        
+
         # sort by audio length for consistent train/test split
         index = sorted(index, key=lambda x: x["audio_len"])
-        
+
         # split into train/test
         random.seed(seed)
         random.shuffle(index)
         split_idx = int(len(index) * train_ratio)
-        
+
         if train:
             index = index[:split_idx]
             logger.info(f"Using train split: {len(index)} samples")
         else:
             index = index[split_idx:]
             logger.info(f"Using test split: {len(index)} samples")
-        
+
         # shuffle if requested (after split)
         if shuffle_index:
             random.seed(seed)
             random.shuffle(index)
-        
+
         # limit number of samples
         if limit is not None:
             index = index[:limit]
             logger.info(f"Limited to {len(index)} samples")
-        
+
         self._index = index
         self.target_sr = target_sr
-        
+
         # setup mel-spectrogram extractor
         if mel_config is None:
             mel_config = MelSpectrogramConfig()
@@ -184,9 +147,9 @@ class RUSLANDataset(Dataset):
             mel_config = MelSpectrogramConfig(**mel_config)
         elif not isinstance(mel_config, MelSpectrogramConfig):
             mel_config = MelSpectrogramConfig(**vars(mel_config))
-        
+
         self.mel_transform = MelSpectrogram(mel_config)
-    
+
     @staticmethod
     def _download_ruslan(data_dir: Optional[str] = None) -> Path:
         """
@@ -204,26 +167,13 @@ class RUSLANDataset(Dataset):
             data_dir = ROOT_PATH / "data" / "datasets" / "ruslan"
         else:
             data_dir = Path(data_dir)
-        
+
         data_dir.mkdir(exist_ok=True, parents=True)
         audio_dir = data_dir / "audio"
-        text_dir = data_dir / "text"
-        
+
         import gdown
 
-        # download csv with text
-        csv_path = data_dir / "metadata_RUSLAN_22200.csv"
-        if not csv_path.exists():
-            logger.info("Downloading metadata_RUSLAN_22200.csv (text)...")
-            gdown.download(
-                id=RUSLAN_METADATA_CSV_FILE_ID,
-                output=str(csv_path),
-                quiet=False,
-            )
-        else:
-            logger.info("Using existing CSV: %s", csv_path)
-
-        # if audio is already filled, check text/
+        # if audio is already filled, just reuse it
         if audio_dir.exists() and any(audio_dir.rglob("*.wav")):
             for p in data_dir.rglob("*.wav"):
                 try:
@@ -231,15 +181,6 @@ class RUSLANDataset(Dataset):
                 except ValueError:
                     p.unlink()
                     logger.info("Removed stray wav: %s", p)
-            wav_files = list(audio_dir.glob("*.wav"))
-            if not any(text_dir.rglob("*.txt")) and csv_path.exists():
-                id_to_text = _parse_ruslan_csv(csv_path)
-                text_dir.mkdir(exist_ok=True, parents=True)
-                for wav_path in wav_files:
-                    text = id_to_text.get(wav_path.stem)
-                    if text is not None:
-                        (text_dir / f"{wav_path.stem}.txt").write_text(text, encoding="utf-8")
-                logger.info("Created text/ from CSV (%d files)", len(id_to_text))
             logger.info("RUSLAN dataset already exists at %s", audio_dir)
             return audio_dir
 
@@ -304,28 +245,16 @@ class RUSLANDataset(Dataset):
                     )
                 wav_files_count = wav_count
         archive_path.unlink()
-
-        # filling folder text/
-        id_to_text = _parse_ruslan_csv(csv_path)
-        text_dir.mkdir(exist_ok=True, parents=True)
-        written = 0
-        for wav_path in audio_dir.glob("*.wav"):
-            text = id_to_text.get(wav_path.stem)
-            if text is not None:
-                (text_dir / f"{wav_path.stem}.txt").write_text(text, encoding="utf-8")
-                written += 1
-        logger.info("Created text/ with %d transcriptions (from CSV), audio: %d files", written, wav_files_count)
-
-        logger.info("RUSLAN dataset ready: %s (audio), %s (text)", audio_dir, text_dir)
+        logger.info("RUSLAN dataset ready: %s (audio, %d files)", audio_dir, wav_files_count)
         return audio_dir
-    
+
     def __len__(self):
         return len(self._index)
-    
+
     def __getitem__(self, idx):
         """
         Get audio and mel-spectrogram.
-        
+
         Returns:
             dict with keys:
                 - waveform: [T] audio waveform
@@ -334,26 +263,26 @@ class RUSLANDataset(Dataset):
         """
         data_dict = self._index[idx]
         audio_path = data_dict["path"]
-        
+
         # load audio
         audio_tensor, sr = torchaudio.load(audio_path)
 
         # take first channel if stereo
         if audio_tensor.shape[0] > 1:
             audio_tensor = audio_tensor[0:1, :]
-        
+
         # resample if needed
         if sr != self.target_sr:
             audio_tensor = torchaudio.functional.resample(
                 audio_tensor, sr, self.target_sr
             )
-        
+
         # convert to mono [1, T] -> [T]
         waveform = audio_tensor.squeeze(0)
-        
+
         # extract mel-spectrogram
         mel_spec = self.mel_transform(waveform)  # [n_mels, T']
-        
+
         out = {
             "waveform": waveform,  # [T]
             "mel_spec": mel_spec,  # [n_mels, T']
@@ -362,3 +291,4 @@ class RUSLANDataset(Dataset):
         if "text" in data_dict:
             out["text"] = data_dict["text"]
         return out
+

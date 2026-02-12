@@ -1,4 +1,6 @@
+import tempfile
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -77,6 +79,7 @@ class CometMLWriter:
 
         except ImportError:
             logger.warning("For use comet_ml install it via \n\t pip install comet_ml")
+            self.exp = None
 
         self.step = 0
         # the mode is usually equal to the current partition name
@@ -183,19 +186,60 @@ class CometMLWriter:
     def add_audio(self, audio_name, audio, sample_rate=None):
         """
         Log an audio to the experiment tracker.
+        Uses temporary WAV file for reliable logging.
 
         Args:
             audio_name (str): name of the audio to use in the tracker.
-            audio (Path | ndarray): audio in the CometML-friendly format.
+            audio (Tensor): audio tensor [L] or [B, L], values in [-1, 1].
             sample_rate (int): audio sample rate.
         """
-        audio = audio.detach().cpu().numpy().T
-        self.exp.log_audio(
-            file_name=self._object_name(audio_name),
-            audio_data=audio,
-            sample_rate=sample_rate,
-            step=self.step,
-        )
+        if getattr(self, "exp", None) is None:
+            return
+        
+        try:
+            import scipy.io.wavfile as wavfile
+        except ImportError:
+            arr = audio.detach().cpu().numpy()
+            arr = np.squeeze(arr)
+            if arr.ndim > 1:
+                arr = arr.flatten()
+            arr = np.ascontiguousarray(arr, dtype=np.float32)
+            if sample_rate is None:
+                sample_rate = 22050
+            self.exp.log_audio(
+                file_name=self._object_name(audio_name),
+                audio_data=arr,
+                sample_rate=sample_rate,
+                step=self.step,
+            )
+            return
+
+        # convert to numpy
+        arr = audio.detach().cpu().numpy()
+        arr = np.squeeze(arr)
+        if arr.ndim > 1:
+            arr = arr.flatten()
+        arr = np.ascontiguousarray(arr, dtype=np.float32)
+        np.clip(arr, -1.0, 1.0, out=arr)
+        
+        if sample_rate is None:
+            sample_rate = 22050
+
+        # save temporary wav file and log file path
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            wav_path = Path(f.name)
+        
+        try:
+            wavfile.write(str(wav_path), sample_rate, arr)
+            self.exp.log_audio(
+                file_name=self._object_name(audio_name),
+                audio_data=str(wav_path),
+                sample_rate=sample_rate,
+                step=self.step,
+            )
+        finally:
+            # clean temp file
+            wav_path.unlink(missing_ok=True)
 
     def add_text(self, text_name, text):
         """
@@ -219,8 +263,6 @@ class CometMLWriter:
                 histogram of.
             bins (int | str): the definition of bins for the histogram.
         """
-        # For comet, bins argument is not required
-        # It is kept for consistency with WandB
 
         values_for_hist = values_for_hist.detach().cpu().numpy()
 

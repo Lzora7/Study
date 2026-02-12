@@ -2,6 +2,7 @@ torch==2.2.0
 torchvision==0.17.0
 torchaudio==2.2.0
 soundfile
+scipy
 numpy==1.26.4
 torch_audiomentations
 tqdm
@@ -10,6 +11,11 @@ pandas
 wandb
 comet_ml
 hydra-core
+omegaconf
+python-dotenv
+librosa
+gdown
+Pillow
 
 black
 isort

@@ -209,23 +209,30 @@ class BaseTrainer:
         self.train_metrics.reset()
         self.writer.set_step((epoch - 1) * self.epoch_len)
         self.writer.add_scalar("epoch", epoch)
+        last_batch = None
         for batch_idx, batch in enumerate(
             tqdm(self.train_dataloader, desc="train", total=self.epoch_len)
         ):
+            last_batch = batch
             try:
                 batch = self.process_batch(
                     batch,
                     metrics=self.train_metrics,
                 )
-            except torch.cuda.OutOfMemoryError as e:
-                if self.skip_oom:
+            except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
+                if self.skip_oom and ("out of memory" in str(e).lower() or "mps" in str(e).lower() or isinstance(e, torch.cuda.OutOfMemoryError)):
                     self.logger.warning("OOM on batch. Skipping batch.")
-                    torch.cuda.empty_cache()  # free some memory
+                    if self.device == "cuda":
+                        torch.cuda.empty_cache()
                     continue
                 else:
                     raise e
 
-            self.train_metrics.update("grad_norm", self._get_grad_norm())
+            # grad_norm is computed before step, added to batch
+            if "grad_norm" in batch:
+                self.train_metrics.update("grad_norm", batch["grad_norm"])
+            else:
+                self.train_metrics.update("grad_norm", self._get_grad_norm())
 
             # log current results
             if batch_idx % self.log_step == 0:
@@ -235,17 +242,23 @@ class BaseTrainer:
                         epoch, self._progress(batch_idx), batch["loss"].item()
                     )
                 )
-                self.writer.add_scalar(
-                    "learning rate", self.lr_scheduler.get_last_lr()[0]
-                )
+                if self.lr_scheduler is not None:
+                    self.writer.add_scalar(
+                        "learning rate", self.lr_scheduler.get_last_lr()[0]
+                    )
                 self._log_scalars(self.train_metrics)
-                self._log_batch(batch_idx, batch)
+                self._log_batch(batch_idx, batch, epoch=epoch)
                 # we don't want to reset train metrics at the start of every epoch
                 # because we are interested in recent train metrics
                 last_train_metrics = self.train_metrics.result()
                 self.train_metrics.reset()
             if batch_idx + 1 >= self.epoch_len:
                 break
+
+        if last_batch is not None:
+            # log audio using the last batch of the epoch
+            self.writer.set_step(epoch * self.epoch_len)
+            self._log_batch(batch_idx, last_batch, epoch=epoch)
 
         logs = last_train_metrics
 
@@ -283,7 +296,7 @@ class BaseTrainer:
             self.writer.set_step(epoch * self.epoch_len, part)
             self._log_scalars(self.evaluation_metrics)
             self._log_batch(
-                batch_idx, batch, part
+                batch_idx, batch, mode=part, epoch=epoch
             )  # log only the last batch during inference
 
         return self.evaluation_metrics.result()
@@ -432,7 +445,7 @@ class BaseTrainer:
         return base.format(current, total, 100.0 * current / total)
 
     @abstractmethod
-    def _log_batch(self, batch_idx, batch, mode="train"):
+    def _log_batch(self, batch_idx, batch, mode="train", epoch=None):
         """
         Abstract method. Should be defined in the nested Trainer Class.
 
@@ -445,6 +458,7 @@ class BaseTrainer:
                 the 'process_batch' function.
             mode (str): train or inference. Defines which logging
                 rules to apply.
+            epoch (int, optional): current epoch number.
         """
         return NotImplementedError()
 
@@ -477,10 +491,11 @@ class BaseTrainer:
             "epoch": epoch,
             "state_dict": self.model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
-            "lr_scheduler": self.lr_scheduler.state_dict(),
             "monitor_best": self.mnt_best,
             "config": self.config,
         }
+        if self.lr_scheduler is not None:
+            state["lr_scheduler"] = self.lr_scheduler.state_dict()
         filename = str(self.checkpoint_dir / f"checkpoint-epoch{epoch}.pth")
         if not (only_best and save_best):
             torch.save(state, filename)
@@ -521,9 +536,12 @@ class BaseTrainer:
         self.model.load_state_dict(checkpoint["state_dict"])
 
         # load optimizer state from checkpoint only when optimizer type is not changed.
+        checkpoint_lr_scheduler = checkpoint["config"].get("lr_scheduler")
+        config_lr_scheduler = self.config.get("lr_scheduler")
+        
         if (
             checkpoint["config"]["optimizer"] != self.config["optimizer"]
-            or checkpoint["config"]["lr_scheduler"] != self.config["lr_scheduler"]
+            or checkpoint_lr_scheduler != config_lr_scheduler
         ):
             self.logger.warning(
                 "Warning: Optimizer or lr_scheduler given in the config file is different "
@@ -532,7 +550,8 @@ class BaseTrainer:
             )
         else:
             self.optimizer.load_state_dict(checkpoint["optimizer"])
-            self.lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
+            if self.lr_scheduler is not None and "lr_scheduler" in checkpoint:
+                self.lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
 
         self.logger.info(
             f"Checkpoint loaded. Resume training from epoch {self.start_epoch}"

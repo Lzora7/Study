@@ -1,56 +1,44 @@
+"""
+GAN Trainer for iSTFTNet vocoder: generator + discriminator, two optimizers.
+"""
+
 import torch
 from torch.nn.utils import clip_grad_norm_
-from src.logger.utils import plot_spectrogram
 
-from src.metrics.tracker import MetricTracker
 from src.trainer.base_trainer import BaseTrainer
 
 
 class GANTrainer(BaseTrainer):
     """
-    Trainer for GAN-based vocoder
-    Two-step training: discriminator step, then generator step.
+    Trainer for GAN-based vocoder (generator + discriminator).
     """
 
     def __init__(
         self,
-        model,  # gen
+        model,
         discriminator,
-        criterion,  # iSTFTLoss
+        criterion,
         metrics,
-        optimizer_g,  # gen optimizer
-        optimizer_d,  # dis optimizer
+        optimizer_g,
+        optimizer_d,
         lr_scheduler_g=None,
         lr_scheduler_d=None,
         text_encoder=None,
         config=None,
-        device="cuda",
+        device=None,
         dataloaders=None,
+        epoch_len=None,
         logger=None,
         writer=None,
-        epoch_len=None,
-        skip_oom=True,
         batch_transforms=None,
+        skip_oom=True,
     ):
-        """
-        Args:
-            model: Generator model
-            discriminator: Discriminator model
-            criterion: Loss function
-            optimizer_g: Optimizer for generator
-            optimizer_d: Optimizer for discriminator
-            lr_scheduler_g: LR scheduler for generator (optional)
-            lr_scheduler_d: LR scheduler for discriminator (optional)
-            ... (other args same as BaseTrainer)
-        """
-
         super().__init__(
             model=model,
             criterion=criterion,
             metrics=metrics,
             optimizer=optimizer_g,
             lr_scheduler=lr_scheduler_g,
-            text_encoder=text_encoder,
             config=config,
             device=device,
             dataloaders=dataloaders,
@@ -59,149 +47,180 @@ class GANTrainer(BaseTrainer):
             epoch_len=epoch_len,
             skip_oom=skip_oom,
             batch_transforms=batch_transforms,
+            text_encoder=text_encoder,
         )
-        
-        self.discriminator = discriminator.to(device)
+        self.discriminator = discriminator
         self.optimizer_g = optimizer_g
         self.optimizer_d = optimizer_d
         self.lr_scheduler_g = lr_scheduler_g
         self.lr_scheduler_d = lr_scheduler_d
 
-    def process_batch(self, batch, metrics: MetricTracker):
+    def process_batch(self, batch, metrics):
         """
-        GAN training: D step first, then G step.
-        
-        Args:
-            batch (dict): contain:
-                - mel_spec or spectrogram: [B, C, T] mel-spectrogram
-                - audio or waveform: [B, L] target waveform
-            metrics (MetricTracker): Metric tracker
-        Returns:
-            batch (dict): Updated with outputs and losses
+        One GAN step: forward generator, forward discriminator on real and pred,
+        generator loss (mel + adv + fm), discriminator loss, backward both.
         """
         batch = self.move_batch_to_device(batch)
         batch = self.transform_batch(batch)
 
+        mel_spec = batch["mel_spec"]
+        waveform_target = batch.get("audio", batch.get("waveform"))
+        if waveform_target.dim() == 2:
+            waveform_target = waveform_target.unsqueeze(1)
 
-        metric_funcs = self.metrics["inference"]
-        if self.is_train:
-            metric_funcs = self.metrics["train"]
+        # generator forward
+        model_kwargs = {k: v for k, v in batch.items() if k != "mel_spec"}
+        waveform_pred = self.model(mel_spec, **model_kwargs)
+        if waveform_pred.dim() == 2:
+            waveform_pred = waveform_pred.unsqueeze(1)
 
-        # get inputs (mel-spectrogram, target waveform)
-        mel_spec = batch.get("mel_spec")
-        if mel_spec is None:
-            mel_spec = batch.get("spectrogram")
-        waveform_target = batch.get("waveform")
-        if waveform_target is None:
-            waveform_target = batch.get("audio")
-        
-        # Ensure waveform_target is 2D [B, L]
-        if waveform_target.dim() == 3:
-            waveform_target = waveform_target.squeeze(1)  # [B, 1, L] -> [B, L]
-        
-        # 1. Generator forward
-        waveform_pred = self.model(mel_spec)  # [B, L]
-        
-        # 2. Discriminator step: D(real) and D(fake.detach())
-        self.discriminator.train()
-        out_real = self.discriminator(waveform_target)
-        out_fake_detached = self.discriminator(waveform_pred.detach())
-        
-        disc_real_outputs = out_real["mpd_outputs"] + out_real["msd_outputs"]
-        disc_fake_outputs = out_fake_detached["mpd_outputs"] + out_fake_detached["msd_outputs"]
-        
-        d_loss, r_losses, g_losses = self.criterion.discriminator_loss(
-            disc_real_outputs, disc_fake_outputs
-        )
-        
-        # Save g_loss (sum of g_losses) for logging
-        g_loss_sum = sum(g_losses) if g_losses else torch.tensor(0.0, device=d_loss.device)
-        
+        # discriminator on real and pred
+        disc_real = self.discriminator(waveform_target)
+        disc_pred = self.discriminator(waveform_pred.detach())
+
+        real_outputs = disc_real["mpd_outputs"] + disc_real["msd_outputs"]
+        pred_outputs = disc_pred["mpd_outputs"] + disc_pred["msd_outputs"]
+        real_features = disc_real["mpd_features"] + disc_real["msd_features"]
+        pred_features = disc_pred["mpd_features"] + disc_pred["msd_features"]
+
+        # discriminator loss
+        d_loss, _, _ = self.criterion.discriminator_loss(real_outputs, pred_outputs)
         if self.is_train:
-            # D backward
+            # backward, optimizer step only in train
             self.optimizer_d.zero_grad()
             d_loss.backward()
-            self._clip_grad_norm_d()
+            if self.config["trainer"].get("max_grad_norm_d") is not None:
+                clip_grad_norm_(
+                    self.discriminator.parameters(),
+                    self.config["trainer"]["max_grad_norm_d"],
+                )
             self.optimizer_d.step()
-            if self.lr_scheduler_d is not None:
-                self.lr_scheduler_d.step()
-        
-        # 3. Generator step: D(waveform_pred) with grad, then G loss
-        out_fake = self.discriminator(waveform_pred)
-        disc_outputs_fake = out_fake["mpd_outputs"] + out_fake["msd_outputs"]
-        feat_fake = out_fake["mpd_features"] + out_fake["msd_features"]
-        feat_real = [f.detach() for f in out_real["mpd_features"] + out_real["msd_features"]]
-        
-        losses = self.criterion(
-            waveform_pred=waveform_pred,
-            waveform_target=waveform_target,
-            discriminator_outputs=disc_outputs_fake,
-            discriminator_features_pred=feat_fake,
-            discriminator_features_target=feat_real,
+
+        # generator loss: run discriminator again on pred (no detach)
+        disc_pred_g = self.discriminator(waveform_pred)
+        pred_outputs_g = disc_pred_g["mpd_outputs"] + disc_pred_g["msd_outputs"]
+        pred_features_g = disc_pred_g["mpd_features"] + disc_pred_g["msd_features"]
+
+        waveform_pred_flat = waveform_pred.squeeze(1)
+        waveform_target_flat = waveform_target.squeeze(1)
+
+        # model output is longer than target
+        target_len = waveform_target_flat.shape[-1]
+        waveform_pred_flat = waveform_pred_flat[..., :target_len]
+
+        gen_losses = self.criterion(
+            waveform_pred_flat,
+            waveform_target_flat,
+            discriminator_outputs=pred_outputs_g,
+            discriminator_features_pred=pred_features_g,
+            discriminator_features_target=[f.detach() for f in real_features],
+            **batch,
         )
-        
+        g_loss = gen_losses["loss"]
         if self.is_train:
-            # G backward
             self.optimizer_g.zero_grad()
-            losses["loss"].backward()
-            self._clip_grad_norm_g()
+            g_loss.backward()
+            self._clip_grad_norm()
             self.optimizer_g.step()
-            if self.lr_scheduler_g is not None:
-                self.lr_scheduler_g.step()
-        
-        # update batch with outputs and losses
-        batch.update({
-            "waveform_pred": waveform_pred,
-            "waveform_target": waveform_target,
-            "mel_spec": mel_spec,
-        })
-        batch.update(losses)
-        batch["d_loss"] = d_loss
-        batch["g_loss"] = g_loss_sum if isinstance(g_loss_sum, torch.Tensor) else torch.tensor(g_loss_sum, device=d_loss.device)
-        
-        # update metrics
-        loss_names = self.config.writer.get("loss_names", ["loss", "mel_loss", "adv_loss", "fm_loss", "d_loss"])
-        for loss_name in loss_names:
-            if loss_name in batch:
-                metrics.update(loss_name, batch[loss_name].item())
-        
-        for met in metric_funcs:
-            metrics.update(met.name, met(**batch))
-        
-        return batch
 
-    def _clip_grad_norm_g(self):
-        """Clip gradients for generator."""
-        if self.cfg_trainer.get("max_grad_norm", None) is not None:
-            clip_grad_norm_(
-                self.model.parameters(),
-                self.cfg_trainer.max_grad_norm
-            )
+        # build return batch for logging
+        out_batch = {
+            **batch,
+            "loss": gen_losses["loss"],
+            "mel_loss": gen_losses.get("mel_loss", torch.tensor(0.0, device=self.device)),
+            "adv_loss": gen_losses.get("adv_loss", torch.tensor(0.0, device=self.device)),
+            "fm_loss": gen_losses.get("fm_loss", torch.tensor(0.0, device=self.device)),
+            "d_loss": d_loss,
+            "g_loss": g_loss,
+            "waveform_pred": waveform_pred_flat,
+        }
+        if "audio" not in out_batch and "waveform" in batch:
+            out_batch["audio"] = batch["waveform"]
 
-    def _clip_grad_norm_d(self):
-        """Clip gradients for discriminator."""
-        if self.cfg_trainer.get("max_grad_norm_d", None) is not None:
-            clip_grad_norm_(
-                self.discriminator.parameters(),
-                self.cfg_trainer.max_grad_norm_d
-            )
-        elif self.cfg_trainer.get("max_grad_norm", None) is not None:
-            clip_grad_norm_(
-                self.discriminator.parameters(),
-                self.cfg_trainer.max_grad_norm
-            )
+        for name in ["loss", "mel_loss", "adv_loss", "fm_loss", "d_loss"]:
+            if name in out_batch and out_batch[name].dim() == 0:
+                metrics.update(name, out_batch[name].item())
 
-    def _log_batch(self, batch_idx, batch, mode="train"):
-        """Log audio/spectrograms for vocoder."""
-        if mode == "train" and batch_idx % self.log_step == 0:
-            self.log_spectrogram(**batch)
+        return out_batch
+
+    def _log_batch(self, batch_idx, batch, mode="train", epoch=None):
+        """Log scalars and audio (target + predicted) when available."""
+        if self.writer is None:
+            return
+        if "waveform_pred" not in batch:
+            return
+        sample_rate = self.config.get("loss_function", {}).get("sample_rate", 22050)
+        pred = batch["waveform_pred"]
+        if pred.dim() > 1:
+            pred = pred[0]
+        self.writer.add_audio("pred", pred, sample_rate=sample_rate)
+        target = batch.get("audio", batch.get("waveform"))
+        if target is not None:
+            t = target[0] if target.dim() > 1 else target
+            self.writer.add_audio("target", t, sample_rate=sample_rate)
+
+    def _save_checkpoint(self, epoch, save_best=False, only_best=False):
+        """Save checkpoint with both generator and discriminator optimizers/schedulers."""
+        arch = type(self.model).__name__
+        state = {
+            "arch": arch,
+            "epoch": epoch,
+            "state_dict": self.model.state_dict(),
+            "discriminator_state_dict": self.discriminator.state_dict(),
+            "optimizer": self.optimizer_g.state_dict(),
+            "optimizer_d": self.optimizer_d.state_dict(),
+            "monitor_best": self.mnt_best,
+            "config": self.config,
+        }
+        if self.lr_scheduler_g is not None:
+            state["lr_scheduler"] = self.lr_scheduler_g.state_dict()
+        if self.lr_scheduler_d is not None:
+            state["lr_scheduler_d"] = self.lr_scheduler_d.state_dict()
+
+        filename = str(self.checkpoint_dir / f"checkpoint-epoch{epoch}.pth")
+        if not (only_best and save_best):
+            torch.save(state, filename)
+            if self.config.writer.log_checkpoints:
+                self.writer.add_checkpoint(filename, str(self.checkpoint_dir.parent))
+            self.logger.info(f"Saving checkpoint: {filename} ...")
+        if save_best:
+            best_path = str(self.checkpoint_dir / "model_best.pth")
+            torch.save(state, best_path)
+            if self.config.writer.log_checkpoints:
+                self.writer.add_checkpoint(best_path, str(self.checkpoint_dir.parent))
+            self.logger.info("Saving current best: model_best.pth ...")
+
+    def _resume_checkpoint(self, resume_path):
+        """Resume from checkpoint (generator, discriminator, both optimizers/schedulers)."""
+        resume_path = str(resume_path)
+        self.logger.info(f"Loading checkpoint: {resume_path} ...")
+        checkpoint = torch.load(resume_path, self.device)
+        self.start_epoch = checkpoint["epoch"] + 1
+        self.mnt_best = checkpoint["monitor_best"]
+
+        if checkpoint["config"]["model"] != self.config["model"]:
+            self.logger.warning(
+                "Warning: Architecture configuration differs from checkpoint."
+            )
+        self.model.load_state_dict(checkpoint["state_dict"])
+        if "discriminator_state_dict" in checkpoint:
+            self.discriminator.load_state_dict(checkpoint["discriminator_state_dict"])
+
+        cfg_opt = checkpoint["config"].get("optimizer_g"), checkpoint["config"].get("optimizer_d")
+        cur_opt = self.config.get("optimizer_g"), self.config.get("optimizer_d")
+        if cfg_opt != cur_opt:
+            self.logger.warning(
+                "Warning: Optimizer config differs; optimizer state not resumed."
+            )
         else:
-            self.log_spectrogram(**batch)
+            self.optimizer_g.load_state_dict(checkpoint["optimizer"])
+            if "optimizer_d" in checkpoint:
+                self.optimizer_d.load_state_dict(checkpoint["optimizer_d"])
+            if self.lr_scheduler_g is not None and "lr_scheduler" in checkpoint:
+                self.lr_scheduler_g.load_state_dict(checkpoint["lr_scheduler"])
+            if self.lr_scheduler_d is not None and "lr_scheduler_d" in checkpoint:
+                self.lr_scheduler_d.load_state_dict(checkpoint["lr_scheduler_d"])
 
-    def log_spectrogram(self, mel_spec=None, spectrogram=None, **batch):
-        """Log mel-spectrogram."""
-        spec = mel_spec or spectrogram
-        if spec is not None:
-            spec_for_plot = spec[0].detach().cpu()
-            image = plot_spectrogram(spec_for_plot)
-            self.writer.add_image("mel_spectrogram", image)
+        self.logger.info(
+            f"Checkpoint loaded. Resume training from epoch {self.start_epoch}"
+        )

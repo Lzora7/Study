@@ -1,7 +1,9 @@
 import warnings
+from pathlib import Path
 
 import hydra
 import torch
+from dotenv import load_dotenv
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
@@ -10,6 +12,11 @@ from src.trainer import GANTrainer
 from src.utils.init_utils import set_random_seed, setup_saving_and_logging
 
 warnings.filterwarnings("ignore", category=UserWarning)
+
+# load .env
+env_path = Path(__file__).parent / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
 
 
 @hydra.main(version_base=None, config_path="src/configs", config_name="baseline")
@@ -27,7 +34,13 @@ def main(config):
     writer = instantiate(config.writer, logger, project_config)
 
     if config.trainer.device == "auto":
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+            device = "mps"
+        elif torch.cuda.is_available():
+            device = "cuda"
+        else:
+            device = "cpu"
+        logger.info(f"Auto device: using {device}")
     else:
         device = config.trainer.device
 

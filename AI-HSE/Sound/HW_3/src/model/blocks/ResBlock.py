@@ -2,52 +2,80 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.nn.utils import weight_norm
-from .ConvBlock import ConvBlock
+
+def get_padding(kernel_size, dilation=1):
+    """Calculate padding for Conv1d to maintain same length."""
+    return int((kernel_size * dilation - dilation) / 2)
 
 class ResBlock(nn.Module):
     """
-    Residual Block with Multi-Receptive Field (MRF) feature extraction.
+
     """
 
-    def __init__(self, ch, kernel_sizes=[3,7,11], dilations=[1,3,5]):
+    def __init__(self, ch, kernel_size=3, dilations=[1, 3, 5]):
         """
         Args:
             ch (int): number of channels.
-            kernel_sizes (List[int]): list of kernel sizes for each ConvBlock.
-            dilations (List[int]): list of dilations for each ConvBlock.
+            kernel_size (int): kernel size for all convolutions (default: 3).
+            dilations (List[int]): list of dilations for convs1 (default: [1, 3, 5]).
         """
         super().__init__()
 
-        # MRF blocks
-        self.conv_block_1 = ConvBlock(ch=ch, kernel_sizes=kernel_sizes, dilations=dilations)
-        self.conv_block_2 = ConvBlock(ch=ch, kernel_sizes=kernel_sizes, dilations=dilations)
-        self.conv_block_3 = ConvBlock(ch=ch, kernel_sizes=kernel_sizes, dilations=dilations)
-        
-        # MRF feature extraction (with weight_norm applied to the layer)
-        self.mrf_extraction = weight_norm(nn.Conv1d(ch*3, ch, kernel_size=1))
+        # 1st set of convolutions with different dilations
+        self.convs1 = nn.ModuleList([
+            weight_norm(nn.Conv1d(
+                ch, ch, kernel_size, stride=1, 
+                dilation=dilations[0],
+                padding=get_padding(kernel_size, dilations[0])
+            )),
+            weight_norm(nn.Conv1d(
+                ch, ch, kernel_size, stride=1,
+                dilation=dilations[1],
+                padding=get_padding(kernel_size, dilations[1])
+            )),
+            weight_norm(nn.Conv1d(
+                ch, ch, kernel_size, stride=1,
+                dilation=dilations[2],
+                padding=get_padding(kernel_size, dilations[2])
+            ))
+        ])
+
+        # 2nd set of convs with dilation=1
+        self.convs2 = nn.ModuleList([
+            weight_norm(nn.Conv1d(
+                ch, ch, kernel_size, stride=1,
+                dilation=1,
+                padding=get_padding(kernel_size, 1)
+            )),
+            weight_norm(nn.Conv1d(
+                ch, ch, kernel_size, stride=1,
+                dilation=1,
+                padding=get_padding(kernel_size, 1)
+            )),
+            weight_norm(nn.Conv1d(
+                ch, ch, kernel_size, stride=1,
+                dilation=1,
+                padding=get_padding(kernel_size, 1)
+            ))
+        ])
 
     def forward(self, mel_spec, **batch):
         """
-        Model forward method.
+        Model forward method
 
         Args:
             mel_spec (Tensor): input spectrogram [B, C, T]
         Returns:
             out (Tensor): output spectrogram [B, C, T] (same size)
         """
-        # feature extraction
-        f1 = self.conv_block_1(mel_spec)
-        f2 = self.conv_block_2(mel_spec)
-        f3 = self.conv_block_3(mel_spec)
-
-        # concat features
-        f_concat = torch.cat([f1, f2, f3], dim=1)  # [B, 3*C, T]
-
-        # MRF extraction
-        mrf = self.mrf_extraction(f_concat)  # [B, C, T]
-        mrf = F.leaky_relu(mrf, 0.1)
-
-        return mrf + mel_spec
+        x = mel_spec
+        for c1, c2 in zip(self.convs1, self.convs2):
+            xt = F.leaky_relu(x, 0.1)
+            xt = c1(xt)
+            xt = F.leaky_relu(xt, 0.1)
+            xt = c2(xt)
+            x = xt + x  # res con
+        return x
 
 
     def transform_input_lengths(self, input_lengths):
@@ -60,7 +88,7 @@ class ResBlock(nn.Module):
         Returns:
             output_lengths (Tensor): new temporal lengths
         """
-        return input_lengths  # we don't reduce time dimension here
+        return input_lengths
 
     def __str__(self):
         """

@@ -1,22 +1,27 @@
 import torch
 from torch import nn
+from torch.nn.utils import weight_norm
 from .blocks.ResBlock import ResBlock
-from .blocks.UpsampleNet import UpsampleNet
+
+def get_padding(kernel_size, dilation=1):
+    """Calculate padding for Conv1d to maintain same length."""
+    return int((kernel_size * dilation - dilation) / 2)
 
 class iSTFTNET_model(nn.Module):
     """
     iSTFTNet model with V1-C8C8C2I architecture:
-    - C8: 8 ResBlocks (first group)
-    - C8: 8 ResBlocks (second group)
-    - C2: UpsampleNet (2 upsampling layers, ×8 total)
+    - C8: Upsample ×8 (512->256) + 8 ResBlocks (256 channels)
+    - C8: Upsample ×8 (256->128) + 8 ResBlocks (128 channels)
+    - C2: Upsample ×2 (128->64) + 2 ResBlocks (64 channels)
+    - C2: Upsample ×2 (64->32) + 2 ResBlocks (32 channels)
     - I: iSTFT
     """
 
-    def __init__(self, in_channels=80, n_features=512, n_fft=16, hop_length=None, win_length=None):
+    def __init__(self, in_channels=80, upsample_initial_channel=512, n_fft=16, hop_length=None, win_length=None):
         """
         Args:
             in_channels (int): number of input mel-spectrogram channels (usually 80)
-            n_features (int): number of hidden features (usually 512)
+            upsample_initial_channel (int): initial channel size (512 for V1)
             n_fft (int): FFT size for iSTFT (usually 16)
             hop_length (int): hop length for iSTFT (default: n_fft // 4)
             win_length (int): window length for iSTFT (default: n_fft)
@@ -33,46 +38,64 @@ class iSTFTNET_model(nn.Module):
         if self.win_length > self.n_fft:
             self.win_length = self.n_fft
         
-        # input Conv (mel-spectrogram -> features)
-        self.InputConv = nn.Conv1d(
-            in_channels, 
-            n_features, 
-            kernel_size=7,
-            stride=1,
-            padding=3
-        )
-        self.LeakyRelu = nn.LeakyReLU(0.1)
+        # Input conv (mel-spectrogram -> features)
+        self.conv_pre = weight_norm(nn.Conv1d(in_channels, upsample_initial_channel, 7, 1, padding=3))
+        
+        # Upsampling layers and ResBlocks
 
-        # C8: first group of 8 ResBlocks
-        self.res_blocks_1 = nn.ModuleList([
-            ResBlock(ch=n_features) for _ in range(8)
+        # C8: Upsample ×8: 512 -> 256
+        self.ups_1 = weight_norm(nn.ConvTranspose1d(
+            upsample_initial_channel // (2**0),  # 512
+            upsample_initial_channel // (2**1),  # 256
+            kernel_size=16,
+            stride=8,
+            padding=(16-8)//2
+        ))
+        self.resblocks_1 = nn.ModuleList([
+            ResBlock(ch=upsample_initial_channel // (2**1)) for _ in range(8)  # 256 channels
         ])
         
-        # C8: second group of 8 ResBlocks
-        self.res_blocks_2 = nn.ModuleList([
-            ResBlock(ch=n_features) for _ in range(8)
+        # C8: Upsample ×8: 256 -> 128
+        self.ups_2 = weight_norm(nn.ConvTranspose1d(
+            upsample_initial_channel // (2**1),  # 256
+            upsample_initial_channel // (2**2),  # 128
+            kernel_size=16,
+            stride=8,
+            padding=(16-8)//2
+        ))
+        self.resblocks_2 = nn.ModuleList([
+            ResBlock(ch=upsample_initial_channel // (2**2)) for _ in range(8)  # 128 channels
         ])
         
-        # C2: UpsampleNet (×8 upsampling)
-        # [B, n_features, T] -> [B, n_fft, 8*T]
-        self.UpsampleNet = UpsampleNet(
-            in_channels=n_features, 
-            out_channels=n_fft
-        )
+        # C2: Upsample ×2: 128 -> 64
+        self.ups_3 = weight_norm(nn.ConvTranspose1d(
+            upsample_initial_channel // (2**2),  # 128
+            upsample_initial_channel // (2**3),  # 64
+            kernel_size=4,
+            stride=2,
+            padding=(4-2)//2
+        ))
+        self.resblocks_3 = nn.ModuleList([
+            ResBlock(ch=upsample_initial_channel // (2**3)) for _ in range(2)  # 64 channels
+        ])
         
-        # output Conv (prepare for iSTFT)
-        n_bins = n_fft // 2 + 1  # number of frequency bins
-        self.OutputConv = nn.Conv1d(
-            n_fft,
-            2 * n_bins,  # magnitude + phase
-            kernel_size=7,
-            stride=1,
-            padding=3
-        )
+        # C2: Upsample ×2: 64 -> 32
+        self.ups_4 = weight_norm(nn.ConvTranspose1d(
+            upsample_initial_channel // (2**3),  # 64
+            n_fft,  # 16
+            kernel_size=4,
+            stride=2,
+            padding=(4-2)//2
+        ))
+        
+        # Output conv
+        n_bins = n_fft // 2 + 1
+        self.conv_post = weight_norm(nn.Conv1d(n_fft, n_bins * 2, 7, 1, padding=3))
+        self.reflection_pad = nn.ReflectionPad1d((1, 0))
 
     def forward(self, mel_spec, **batch):
         """
-        Model forward method.
+        Model forward method matching original iSTFTNet.
 
         Args:
             mel_spec (Tensor): mel-spectrogram [B, C, T]
@@ -84,37 +107,47 @@ class iSTFTNET_model(nn.Module):
                 B - Batch
                 L - Length of waveform
         """
-        # Input Conv
-        out = self.LeakyRelu(self.InputConv(mel_spec))
+        # Input conv
+        x = self.conv_pre(mel_spec)
+        x = torch.nn.functional.leaky_relu(x, 0.1)
         
-        # C8: First group of 8 ResBlocks
-        for res_block in self.res_blocks_1:
-            out = res_block(out)
+        # C8: 1st upsampling + ResBlocks
+        x = self.ups_1(x)
+        x = torch.nn.functional.leaky_relu(x, 0.1)
+        for res_block in self.resblocks_1:
+            x = res_block(x)
         
-        # C8: Second group of 8 ResBlocks
-        for res_block in self.res_blocks_2:
-            out = res_block(out)
+        # C8: 2nd upsampling + ResBlocks
+        x = self.ups_2(x)
+        x = torch.nn.functional.leaky_relu(x, 0.1)
+        for res_block in self.resblocks_2:
+            x = res_block(x)
         
-        # C2: UpsampleNet (×8 upsampling)
-        out = self.UpsampleNet(out)  # [B, n_fft, 8*T]
+        # C2: 3rd upsampling + ResBlocks
+        x = self.ups_3(x)
+        x = torch.nn.functional.leaky_relu(x, 0.1)
+        for res_block in self.resblocks_3:
+            x = res_block(x)
         
-        # Output Conv
-        out = self.OutputConv(out)  # [B, 2*n_bins, 8*T]
+        # C2: 4th upsampling (to n_fft channels)
+        x = self.ups_4(x)
+        x = torch.nn.functional.leaky_relu(x, 0.1)
         
-        # split into magnitude and phase
+        # Output conv
+        x = self.reflection_pad(x)
+        x = self.conv_post(x)
+        
+        # Split into magnitude and phase
         n_bins = self.n_fft // 2 + 1
-        log_mag = torch.clamp(out[:, :n_bins], -20.0, 20.0)
-        magnitude = torch.exp(log_mag)  # [B, n_bins, 8*T]
-        phase = out[:, n_bins:]  # [B, n_bins, 8*T]
+        magnitude = torch.exp(x[:, :n_bins, :])  
+        phase = torch.sin(x[:, n_bins:, :])
         
-        # convert phase to real and imaginary parts
-        real_part = torch.cos(phase)
-        imag_part = torch.sin(phase)
+        # convert to complex spectrogram
+        real_part = magnitude * torch.cos(phase)
+        imag_part = magnitude * torch.sin(phase)
+        complex_spec = real_part + 1j * imag_part
         
-        # complex spec
-        complex_spec = magnitude * (real_part + 1j * imag_part)  # [B, n_bins, 8*T]
-        
-        # iSTFT: convert to waveform
+        # convert to waveform
         waveform = torch.istft(
             complex_spec,
             n_fft=self.n_fft,
@@ -139,7 +172,7 @@ class iSTFTNET_model(nn.Module):
         Returns:
             output_lengths (Tensor): new temporal lengths
         """
-        return input_lengths  # we don't reduce time dimension here
+        return input_lengths * 256
 
     def __str__(self):
         """

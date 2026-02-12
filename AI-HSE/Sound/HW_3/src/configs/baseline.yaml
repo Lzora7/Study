@@ -1,7 +1,6 @@
-# Vocoder (iSTFTNet) training config
 defaults:
   - model: istftnet
-  - writer: wandb
+  - writer: cometml
   - metrics: example
   - datasets: ruslan
   - dataloader: example
@@ -46,7 +45,7 @@ trainer:
   resume_from: null
   device: auto
   override: false
-  monitor: "min val_loss"
+  monitor: "min test_loss"
   save_period: 10
   early_stop: ${trainer.n_epochs}
   save_dir: "saved"

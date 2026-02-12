@@ -15,25 +15,23 @@ class ConvBlock(nn.Module):
         """
         super().__init__()
         
-        # add size
+
         self.Conv1 = nn.Conv1d(
             ch, 
-            ch*2, 
+            ch, 
             kernel_size=kernel_sizes[0], 
             dilation=dilations[0], 
             padding=(kernel_sizes[0]-1)*dilations[0]//2
         )
-        # keep size
         self.Conv2 = nn.Conv1d(
-            ch*2, 
-            ch*2, 
+            ch, 
+            ch, 
             kernel_size=kernel_sizes[1], 
             dilation=dilations[1],
             padding=(kernel_sizes[1]-1)*dilations[1]//2
         )
-        # small size
         self.Conv3 = nn.Conv1d(
-            ch*2, 
+            ch, 
             ch, 
             kernel_size=kernel_sizes[2], 
             dilation=dilations[2],
