@@ -63,7 +63,7 @@ class RUSLANDataset(Dataset):
         """
         audio_dir = Path(audio_dir)
 
-        # automatic download
+        # automatic download if directory missing or empty
         if not audio_dir.exists():
             if download:
                 logger.info(f"Audio directory not found: {audio_dir}")
@@ -71,7 +71,8 @@ class RUSLANDataset(Dataset):
                 audio_dir = self._download_ruslan(data_dir)
             else:
                 raise ValueError(
-                    f"Audio directory does not exist: {audio_dir}\n"
+                    f"Audio directory does not exist: {audio_dir}. "
+                    "Set download=true in config to download automatically."
                 )
 
         # find all audio files
@@ -81,7 +82,15 @@ class RUSLANDataset(Dataset):
             audio_files.extend(list(audio_dir.glob(f"**/*{ext}")))
 
         if len(audio_files) == 0:
-            raise ValueError(f"No audio files found in {audio_dir}")
+            if download:
+                logger.info(f"No audio files in {audio_dir}. Downloading RUSLAN dataset...")
+                audio_dir = self._download_ruslan(data_dir)
+                audio_files = []
+                for ext in [".wav", ".flac", ".mp3", ".m4a"]:
+                    audio_files.extend(list(audio_dir.glob(f"*{ext}")))
+                    audio_files.extend(list(audio_dir.glob(f"**/*{ext}")))
+            if len(audio_files) == 0:
+                raise ValueError(f"No audio files found in {audio_dir}")
 
         logger.info(f"Found {len(audio_files)} audio files in {audio_dir}")
 

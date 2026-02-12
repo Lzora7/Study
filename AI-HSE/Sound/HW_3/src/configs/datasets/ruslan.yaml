@@ -4,7 +4,7 @@ train:
   _target_: src.datasets.ruslan_dataset.RUSLANDataset
   audio_dir: "data/datasets/ruslan/audio"
   target_sr: 22050
-  download: false
+  download: true   # при старте обучения, если папки нет или пусто — датасет скачается с Google Drive
   mel_config:
     _target_: src.transforms.mel_spectrogram.MelSpectrogramConfig
     sr: 22050
@@ -27,7 +27,7 @@ test:
   _target_: src.datasets.ruslan_dataset.RUSLANDataset
   audio_dir: "data/datasets/ruslan/audio"  # same directory
   target_sr: 22050
-  download: false 
+  download: true   # при старте обучения, если папки нет или пусто — датасет скачается с Google Drive 
   mel_config:
     _target_: src.transforms.mel_spectrogram.MelSpectrogramConfig
     sr: 22050
