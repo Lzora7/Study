@@ -1,0 +1,121 @@
+2026-02-13 10:25:18,348 - train - INFO - Auto device: using cuda
+2026-02-13 10:25:19,242 - src.datasets.ruslan_dataset - INFO - Found 88800 audio files in data/datasets/ruslan/audio
+2026-02-13 10:25:22,108 - src.datasets.ruslan_dataset - INFO - Filtered 2322 (5.2%) records longer than 8 seconds
+2026-02-13 10:25:22,134 - src.datasets.ruslan_dataset - INFO - Using train split: 37870 samples
+2026-02-13 10:25:23,991 - src.datasets.ruslan_dataset - INFO - Found 88800 audio files in data/datasets/ruslan/audio
+2026-02-13 10:25:26,721 - src.datasets.ruslan_dataset - INFO - Filtered 2322 (5.2%) records longer than 8 seconds
+2026-02-13 10:25:26,754 - src.datasets.ruslan_dataset - INFO - Using test split: 4208 samples
+2026-02-13 10:25:27,160 - train - INFO - Generator:
+2026-02-13 10:25:27,161 - train - INFO - iSTFTNET_model(
+  (conv_pre): Conv1d(80, 512, kernel_size=(7,), stride=(1,), padding=(3,))
+  (ups_1): ConvTranspose1d(512, 256, kernel_size=(16,), stride=(8,), padding=(4,))
+  (resblocks_1): ModuleList(
+    (0-7): 8 x ResBlock(
+      (convs1): ModuleList(
+        (0): Conv1d(256, 256, kernel_size=(3,), stride=(1,), padding=(1,))
+        (1): Conv1d(256, 256, kernel_size=(3,), stride=(1,), padding=(3,), dilation=(3,))
+        (2): Conv1d(256, 256, kernel_size=(3,), stride=(1,), padding=(5,), dilation=(5,))
+      )
+      (convs2): ModuleList(
+        (0-2): 3 x Conv1d(256, 256, kernel_size=(3,), stride=(1,), padding=(1,))
+      )
+    )
+  )
+  (ups_2): ConvTranspose1d(256, 128, kernel_size=(16,), stride=(8,), padding=(4,))
+  (resblocks_2): ModuleList(
+    (0-7): 8 x ResBlock(
+      (convs1): ModuleList(
+        (0): Conv1d(128, 128, kernel_size=(3,), stride=(1,), padding=(1,))
+        (1): Conv1d(128, 128, kernel_size=(3,), stride=(1,), padding=(3,), dilation=(3,))
+        (2): Conv1d(128, 128, kernel_size=(3,), stride=(1,), padding=(5,), dilation=(5,))
+      )
+      (convs2): ModuleList(
+        (0-2): 3 x Conv1d(128, 128, kernel_size=(3,), stride=(1,), padding=(1,))
+      )
+    )
+  )
+  (ups_3): ConvTranspose1d(128, 64, kernel_size=(4,), stride=(2,), padding=(1,))
+  (resblocks_3): ModuleList(
+    (0-1): 2 x ResBlock(
+      (convs1): ModuleList(
+        (0): Conv1d(64, 64, kernel_size=(3,), stride=(1,), padding=(1,))
+        (1): Conv1d(64, 64, kernel_size=(3,), stride=(1,), padding=(3,), dilation=(3,))
+        (2): Conv1d(64, 64, kernel_size=(3,), stride=(1,), padding=(5,), dilation=(5,))
+      )
+      (convs2): ModuleList(
+        (0-2): 3 x Conv1d(64, 64, kernel_size=(3,), stride=(1,), padding=(1,))
+      )
+    )
+  )
+  (ups_4): ConvTranspose1d(64, 16, kernel_size=(4,), stride=(2,), padding=(1,))
+  (conv_post): Conv1d(16, 18, kernel_size=(7,), stride=(1,), padding=(3,))
+  (reflection_pad): ReflectionPad1d((1, 0))
+)
+All parameters: 14931860
+Trainable parameters: 14931860
+2026-02-13 10:25:27,183 - train - INFO - Discriminator:
+2026-02-13 10:25:27,183 - train - INFO - HiFiGANDiscriminator(
+  (mpd): MultiPeriodDiscriminator(
+    (discriminators): ModuleList(
+      (0-4): 5 x PeriodDiscriminator(
+        (convs): ModuleList(
+          (0): Conv2d(1, 4, kernel_size=(5, 1), stride=(3, 1), padding=(2, 0))
+          (1): LeakyReLU(negative_slope=0.1)
+          (2): Conv2d(4, 8, kernel_size=(5, 1), stride=(3, 1), padding=(2, 0))
+          (3): LeakyReLU(negative_slope=0.1)
+          (4): Conv2d(8, 16, kernel_size=(5, 1), stride=(3, 1), padding=(2, 0))
+          (5): LeakyReLU(negative_slope=0.1)
+          (6): Conv2d(16, 32, kernel_size=(5, 1), stride=(3, 1), padding=(2, 0))
+          (7): LeakyReLU(negative_slope=0.1)
+          (8): Conv2d(32, 1, kernel_size=(3, 1), stride=(1, 1), padding=(1, 0))
+        )
+      )
+    )
+  )
+  (msd): MultiScaleDiscriminator(
+    (discriminators): ModuleList(
+      (0-2): 3 x ScaleDiscriminator(
+        (convs): ModuleList(
+          (0): Conv1d(1, 4, kernel_size=(15,), stride=(1,), padding=(7,))
+          (1): LeakyReLU(negative_slope=0.1)
+          (2): Conv1d(4, 4, kernel_size=(41,), stride=(4,), padding=(20,), groups=4)
+          (3): LeakyReLU(negative_slope=0.1)
+          (4): Conv1d(4, 8, kernel_size=(15,), stride=(1,), padding=(7,))
+          (5): LeakyReLU(negative_slope=0.1)
+          (6): Conv1d(8, 8, kernel_size=(41,), stride=(4,), padding=(20,), groups=8)
+          (7): LeakyReLU(negative_slope=0.1)
+          (8): Conv1d(8, 16, kernel_size=(15,), stride=(1,), padding=(7,))
+          (9): LeakyReLU(negative_slope=0.1)
+          (10): Conv1d(16, 16, kernel_size=(41,), stride=(4,), padding=(20,), groups=16)
+          (11): LeakyReLU(negative_slope=0.1)
+          (12): Conv1d(16, 32, kernel_size=(15,), stride=(1,), padding=(7,))
+          (13): LeakyReLU(negative_slope=0.1)
+          (14): Conv1d(32, 32, kernel_size=(41,), stride=(4,), padding=(20,), groups=32)
+          (15): LeakyReLU(negative_slope=0.1)
+          (16): Conv1d(32, 1, kernel_size=(3,), stride=(1,), padding=(1,))
+        )
+      )
+    )
+    (pooling): ModuleList(
+      (0-1): 2 x AvgPool1d(kernel_size=(4,), stride=(2,), padding=(2,))
+    )
+  )
+)
+2026-02-13 10:25:27,188 - train - INFO - Loss function: iSTFTLoss
+2026-02-13 10:25:27,889 - train - INFO - Generator optimizer: AdamW
+2026-02-13 10:25:27,889 - train - INFO - Discriminator optimizer: AdamW
+2026-02-13 14:28:48,528 - urllib3.connectionpool - WARNING - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ReadTimeoutError("HTTPSConnectionPool(host='www.comet.com', port=443): Read timed out. (read timeout=10)")': /clientlib/rest/v2/write/experiment/output
+2026-02-13 15:40:00,175 - urllib3.connectionpool - WARNING - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ReadTimeoutError("HTTPSConnectionPool(host='www.comet.com', port=443): Read timed out. (read timeout=10)")': /clientlib/status-report/update
+2026-02-13 15:54:42,452 - train - INFO -     epoch          : 1
+2026-02-13 15:54:42,453 - train - INFO -     loss           : 179.69126586914064
+2026-02-13 15:54:42,453 - train - INFO -     mel_loss       : 3.5273714733123778
+2026-02-13 15:54:42,454 - train - INFO -     adv_loss       : 4.247434678077698
+2026-02-13 15:54:42,454 - train - INFO -     fm_loss        : 8.356056251525878
+2026-02-13 15:54:42,454 - train - INFO -     d_loss         : 2.4390488195419313
+2026-02-13 15:54:42,454 - train - INFO -     grad_norm      : 0.9999999964237213
+2026-02-13 15:54:42,454 - train - INFO -     test_loss      : 180.92431395498065
+2026-02-13 15:54:42,454 - train - INFO -     test_mel_loss  : 3.5427450777913227
+2026-02-13 15:54:42,454 - train - INFO -     test_adv_loss  : 4.739150503742378
+2026-02-13 15:54:42,455 - train - INFO -     test_fm_loss   : 8.380817414236613
+2026-02-13 15:54:42,455 - train - INFO -     test_d_loss    : 2.266124015298633
+2026-02-13 15:54:42,854 - train - INFO - Saving current best: model_best.pth ...

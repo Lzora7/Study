@@ -33,6 +33,11 @@ class GANTrainer(BaseTrainer):
         batch_transforms=None,
         skip_oom=True,
     ):
+        self.discriminator = discriminator
+        self.optimizer_g = optimizer_g
+        self.optimizer_d = optimizer_d
+        self.lr_scheduler_g = lr_scheduler_g
+        self.lr_scheduler_d = lr_scheduler_d
         super().__init__(
             model=model,
             criterion=criterion,
@@ -49,11 +54,6 @@ class GANTrainer(BaseTrainer):
             batch_transforms=batch_transforms,
             text_encoder=text_encoder,
         )
-        self.discriminator = discriminator
-        self.optimizer_g = optimizer_g
-        self.optimizer_d = optimizer_d
-        self.lr_scheduler_g = lr_scheduler_g
-        self.lr_scheduler_d = lr_scheduler_d
 
     def process_batch(self, batch, metrics):
         """
