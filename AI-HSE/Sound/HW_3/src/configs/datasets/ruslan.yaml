@@ -1,10 +1,9 @@
-# RUSLAN: audio в audio/, текст в text/ (то же имя файла: 001.wav ↔ 001.txt)
 
 train:
   _target_: src.datasets.ruslan_dataset.RUSLANDataset
   audio_dir: "data/datasets/ruslan/audio"
   target_sr: 22050
-  download: true   # при старте обучения, если папки нет или пусто — датасет скачается с Google Drive
+  download: true
   mel_config:
     _target_: src.transforms.mel_spectrogram.MelSpectrogramConfig
     sr: 22050
@@ -17,7 +16,7 @@ train:
     power: 2.0
     pad_value: -11.5129251
   limit: null  # number to limit training samples
-  max_audio_length: null  # max seconds
+  max_audio_length: 8  # seconds
   shuffle_index: true
   train: true
   train_ratio: 0.9
@@ -27,7 +26,7 @@ test:
   _target_: src.datasets.ruslan_dataset.RUSLANDataset
   audio_dir: "data/datasets/ruslan/audio"  # same directory
   target_sr: 22050
-  download: true   # при старте обучения, если папки нет или пусто — датасет скачается с Google Drive 
+  download: true
   mel_config:
     _target_: src.transforms.mel_spectrogram.MelSpectrogramConfig
     sr: 22050
@@ -40,7 +39,7 @@ test:
     power: 2.0
     pad_value: -11.5129251
   limit: null
-  max_audio_length: null
+  max_audio_length: 8
   shuffle_index: false
   train: false
   train_ratio: 0.9
