@@ -1,0 +1,15 @@
+defaults:
+  - baseline
+
+datasets:
+  train:
+    max_audio_length: 6
+    limit: null
+
+dataloader:
+  batch_size: 8
+  num_workers: 6
+
+trainer:
+  n_epochs: 500
+  save_period: 5
