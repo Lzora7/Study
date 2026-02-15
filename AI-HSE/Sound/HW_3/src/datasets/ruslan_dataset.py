@@ -39,6 +39,7 @@ class RUSLANDataset(Dataset):
         mel_config: Optional[MelSpectrogramConfig] = None,
         limit: Optional[int] = None,
         max_audio_length: Optional[float] = None,
+        truncate_to_max_length: bool = False,
         shuffle_index: bool = False,
         train: bool = True,
         train_ratio: float = 0.9,
@@ -54,7 +55,9 @@ class RUSLANDataset(Dataset):
             mel_config (MelSpectrogramConfig): Configuration for mel-spectrogram extraction.
                 If None, uses default config.
             limit (int | None): Limit number of samples
-            max_audio_length (float | None): Maximum audio length in seconds
+            max_audio_length (float | None): Maximum audio length in seconds.
+            truncate_to_max_length (bool): If True, keep all files but load only first max_audio_length
+                seconds for long files (saves memory). If False, drop files longer than max_audio_length.
             shuffle_index (bool): Whether to shuffle the dataset
             train (bool): If True, use train split, else test split
             train_ratio (float): Ratio of train/test split (default 0.9)
@@ -103,7 +106,11 @@ class RUSLANDataset(Dataset):
             try:
                 info = torchaudio.info(str(audio_path))
                 duration = info.num_frames / info.sample_rate
-                entry = {"path": str(audio_path), "audio_len": duration}
+                entry = {
+                    "path": str(audio_path),
+                    "audio_len": duration,
+                    "sample_rate": info.sample_rate,
+                }
                 index.append(entry)
             except Exception as e:
                 logger.warning(f"Failed to load {audio_path}: {e}")
@@ -112,14 +119,20 @@ class RUSLANDataset(Dataset):
         if len(index) == 0:
             raise ValueError("No valid audio files found")
 
-        # filter by max_audio_length
-        if max_audio_length is not None:
+        self._max_audio_length = max_audio_length
+        self._truncate_to_max_length = truncate_to_max_length
+        if max_audio_length is not None and not truncate_to_max_length:
             initial_size = len(index)
             index = [item for item in index if item["audio_len"] <= max_audio_length]
             filtered = initial_size - len(index)
             logger.info(
                 f"Filtered {filtered} ({filtered / initial_size:.1%}) records longer than "
                 f"{max_audio_length} seconds"
+            )
+        elif max_audio_length is not None and truncate_to_max_length:
+            long_count = sum(1 for item in index if item["audio_len"] > max_audio_length)
+            logger.info(
+                f"Keeping all files; {long_count} longer than {max_audio_length}s will be truncated on load"
             )
 
         # sort by audio length for consistent train/test split
@@ -272,8 +285,18 @@ class RUSLANDataset(Dataset):
         data_dict = self._index[idx]
         audio_path = data_dict["path"]
 
-        # load audio
-        audio_tensor, sr = torchaudio.load(audio_path)
+        # load audio (only first max_audio_length seconds for long files to avoid OOM)
+        num_frames = None
+        if (
+            self._max_audio_length is not None
+            and self._truncate_to_max_length
+            and data_dict["audio_len"] > self._max_audio_length
+        ):
+            num_frames = int(self._max_audio_length * data_dict["sample_rate"])
+        if num_frames is not None:
+            audio_tensor, sr = torchaudio.load(audio_path, num_frames=num_frames)
+        else:
+            audio_tensor, sr = torchaudio.load(audio_path)
 
         # take first channel if stereo
         if audio_tensor.shape[0] > 1:

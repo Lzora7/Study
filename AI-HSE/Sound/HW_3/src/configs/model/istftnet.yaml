@@ -2,5 +2,5 @@ _target_: src.model.iSTFTNET_model
 in_channels: 80
 upsample_initial_channel: 512
 n_fft: 16
-hop_length: null  # default n_fft//4
-win_length: null  # default n_fft
+hop_length: 1
+win_length: 4

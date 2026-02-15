@@ -23,18 +23,15 @@ class iSTFTNET_model(nn.Module):
             in_channels (int): number of input mel-spectrogram channels (usually 80)
             upsample_initial_channel (int): initial channel size (512 for V1)
             n_fft (int): FFT size for iSTFT (usually 16)
-            hop_length (int): hop length for iSTFT (default: n_fft // 4)
-            win_length (int): window length for iSTFT (default: n_fft)
+            hop_length (int): hop length for iSTFT
+            win_length (int): window length for iSTFT; 4 per paper (mel_win/256)
         """
         super().__init__()
         
         self.n_fft = n_fft
 
-        # default values
-        self.hop_length = hop_length if hop_length is not None else n_fft // 4
-        self.win_length = win_length if win_length is not None else n_fft
-        
-        # ensure win_length <= n_fft
+        self.hop_length = hop_length if hop_length is not None else 1
+        self.win_length = win_length if win_length is not None else min(4, n_fft)
         if self.win_length > self.n_fft:
             self.win_length = self.n_fft
         
@@ -159,6 +156,10 @@ class iSTFTNET_model(nn.Module):
             onesided=True,
             length=None
         )
+
+        expected_len = mel_spec.shape[-1] * 256
+        if waveform.shape[-1] > expected_len:
+            waveform = waveform[..., :expected_len]
 
         return waveform
 
