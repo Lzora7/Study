@@ -128,7 +128,10 @@ def main(config):
     with torch.no_grad():
         for idx in tqdm(range(len(dataset)), desc="Synthesizing"):
             item = dataset[idx]
-            mel_spec = item["mel_spec"].unsqueeze(0).to(device)  # [1, n_mels, T]
+            mel_spec = item["mel_spec"].to(device)
+            if mel_spec.dim() == 2:
+                mel_spec = mel_spec.unsqueeze(0)  # [n_mels, T] -> [1, n_mels, T]
+            # already [1, n_mels, T]
             audio_path = item.get("audio_path", f"audio_{idx}.wav")
             
             # gen waveform
