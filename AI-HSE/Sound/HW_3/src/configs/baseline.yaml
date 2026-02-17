@@ -7,6 +7,11 @@ defaults:
   - transforms: example_only_instance
   - _self_
 
+# synthesize.py: override via CLI
+checkpoint: null
+input_dir: null
+output_dir: null
+
 discriminator:
   _target_: src.model.HiFiGANDiscriminator
   periods: [2, 3, 5, 7, 11]
