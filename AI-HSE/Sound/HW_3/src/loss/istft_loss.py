@@ -149,7 +149,7 @@ class iSTFTLoss(Module):
                     feat_pred = feat_pred[tuple(slice(0, s) for s in min_shape)]
                     feat_target = feat_target[tuple(slice(0, s) for s in min_shape)]
 
-                # E[|f_real - f_fake|]
+                # E[\f_real - f_fake|]
                 fm_loss += torch.mean(torch.abs(feat_pred - feat_target))
             fm_loss = fm_loss * 2
             total_loss += self.fm_loss_weight * fm_loss

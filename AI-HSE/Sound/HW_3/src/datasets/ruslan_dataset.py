@@ -285,7 +285,6 @@ class RUSLANDataset(Dataset):
         data_dict = self._index[idx]
         audio_path = data_dict["path"]
 
-        # load audio (only first max_audio_length seconds for long files to avoid OOM)
         num_frames = None
         if (
             self._max_audio_length is not None

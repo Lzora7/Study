@@ -3,7 +3,7 @@ defaults:
 
 datasets:
   train:
-    max_audio_length: 10
+    max_audio_length: 5
     limit: null
 
 dataloader:

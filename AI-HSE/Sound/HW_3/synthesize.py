@@ -1,13 +1,3 @@
-"""
-Synthesize audio using trained vocoder model.
-
-The script:
-1. Loads a trained vocoder model from checkpoint
-2. Applies it to a dataset
-3. Saves synthesized audio files to output directory
-4. Preserves original filenames
-"""
-
 import warnings
 from pathlib import Path
 
@@ -38,7 +28,7 @@ def main(config):
     Args:
         config: Hydra config with checkpoint, input_dir, output_dir specified via CLI.
     """
-    # Get paths from config
+    # get paths from config
     checkpoint_path = OmegaConf.select(config, "checkpoint", default=None)
     input_dir = OmegaConf.select(config, "input_dir", default=None)
     output_dir = OmegaConf.select(config, "output_dir", default=None)
