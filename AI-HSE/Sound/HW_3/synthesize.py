@@ -44,13 +44,22 @@ def main(config):
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)
     
+    # Определяем корень проекта (где лежит synthesize.py) - работает и в Colab
     project_root = Path(__file__).parent.resolve()
+    print(f"Project root: {project_root}")
+    print(f"Current working directory: {Path.cwd()}")
+    
+    # Преобразуем относительные пути в абсолютные относительно project_root
     if not checkpoint_path.is_absolute():
         checkpoint_path = (project_root / checkpoint_path).resolve()
     if not input_dir.is_absolute():
         input_dir = (project_root / input_dir).resolve()
     if not output_dir.is_absolute():
         output_dir = (project_root / output_dir).resolve()
+    
+    print(f"Checkpoint (resolved): {checkpoint_path}")
+    print(f"Input dir (resolved): {input_dir}")
+    print(f"Output dir (resolved): {output_dir}")
     
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
@@ -59,6 +68,7 @@ def main(config):
     
     # output directory
     output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Output directory created/verified: {output_dir}")
     
     # device
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -66,7 +76,7 @@ def main(config):
     
     # load checkpoint
     print(f"Loading checkpoint: {checkpoint_path}")
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     
     # get config from checkpoint or use provided config
     if "config" in checkpoint:
@@ -165,11 +175,24 @@ def main(config):
                 waveform_pred,
                 sample_rate=sample_rate,
             )
+            if idx == 0:  # Выводим путь первого файла для отладки
+                print(f"  Первый файл сохранён: {output_path}")
     
-    n_saved = len(list(output_dir.glob("*.wav")))
+    # Проверяем, что файлы действительно сохранены
+    saved_files = list(output_dir.glob("*.wav"))
+    n_saved = len(saved_files)
     print(f"\n✓ Synthesis complete. Generated {len(dataset)} audio files.")
     print(f"  Сохранено в (абсолютный путь): {output_dir}")
     print(f"  Файлов в папке: {n_saved}")
+    if n_saved > 0:
+        print(f"  Примеры файлов:")
+        for f in sorted(saved_files)[:3]:
+            print(f"    - {f.name}")
+        if n_saved > 3:
+            print(f"    ... и ещё {n_saved - 3} файлов")
+    else:
+        print(f"  ⚠️  ВНИМАНИЕ: Файлы не найдены в {output_dir}!")
+        print(f"     Проверьте права доступа и путь.")
 
 
 if __name__ == "__main__":
