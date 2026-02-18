@@ -50,11 +50,9 @@ class MelSpectrogram(nn.Module):
             n_mels=config.n_mels,
             fmin=config.f_min,
             fmax=config.f_max
-        ).T
+        ).T.astype("float32")
         # for Collab
-        fb = torch.from_numpy(mel_basis.astype("float32")).to(
-            self.mel_spectrogram.mel_scale.fb.dtype
-        )
+        fb = torch.tensor(mel_basis.tolist(), dtype=self.mel_spectrogram.mel_scale.fb.dtype)
         self.mel_spectrogram.mel_scale.fb.copy_(fb)
 
     def forward(self, audio: torch.Tensor) -> torch.Tensor:
