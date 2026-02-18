@@ -20,9 +20,6 @@ if env_path.exists():
     load_dotenv(env_path)
 
 
-# Папка проекта = где лежит synthesize.py (не зависит от cwd при запуске из Colab/subprocess)
-_PROJECT_ROOT = Path(__file__).parent.resolve()
-
 @hydra.main(version_base=None, config_path="src/configs", config_name="baseline")
 def main(config):
     """
@@ -31,8 +28,6 @@ def main(config):
     Args:
         config: Hydra config with checkpoint, input_dir, output_dir specified via CLI.
     """
-    project_root = _PROJECT_ROOT
-    
     # get paths from config
     checkpoint_path = OmegaConf.select(config, "checkpoint", default=None)
     input_dir = OmegaConf.select(config, "input_dir", default=None)
@@ -48,13 +43,6 @@ def main(config):
     checkpoint_path = Path(checkpoint_path)
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)
-    
-    if not checkpoint_path.is_absolute():
-        checkpoint_path = (project_root / checkpoint_path).resolve()
-    if not input_dir.is_absolute():
-        input_dir = (project_root / input_dir).resolve()
-    if not output_dir.is_absolute():
-        output_dir = (project_root / output_dir).resolve()
     
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
@@ -170,10 +158,9 @@ def main(config):
                 sample_rate=sample_rate,
             )
     
-    saved_files = list(output_dir.glob("*.wav"))
-    print(f"\n✓ Synthesis complete. Generated {len(dataset)} audio files.")
-    print(f"  Output dir (absolute): {output_dir}")
-    print(f"  Files saved: {len(saved_files)}")
+    print(f"\n✓ Synthesis complete. Generated {len(dataset)} audio files in {output_dir}")
+    print(f"  Original files: {input_dir}/audio/")
+    print(f"  Synthesized files: {output_dir}/")
 
 
 if __name__ == "__main__":
