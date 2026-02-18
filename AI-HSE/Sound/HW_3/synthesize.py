@@ -1,3 +1,4 @@
+import os
 import warnings
 from pathlib import Path
 
@@ -163,35 +164,43 @@ def main(config):
             original_path = Path(audio_path)
             original_name = original_path.stem  # filename without extension
             
-            # save gen audio
+            # save gen audio — всегда абсолютный путь для Colab/разных cwd
             output_path = output_dir / f"{original_name}_synthesized.wav"
+            out_path_abs = os.path.abspath(os.path.normpath(str(output_path)))
             
-            # check waveform is 2D
             if waveform_pred.dim() == 1:
                 waveform_pred = waveform_pred.unsqueeze(0)  # [1, L]
             
-            out_str = str(output_path)
-            torchaudio.save(out_str, waveform_pred, sample_rate=sample_rate)
-            if not Path(out_str).exists():
-                print(f"  ⚠️ Ошибка: файл не создан: {output_path}")
+            try:
+                torchaudio.save(out_path_abs, waveform_pred, sample_rate=sample_rate)
+            except Exception as e:
+                print(f"Ошибка сохранения {output_path.name}: {e}")
+                raise
+            if not os.path.isfile(out_path_abs):
+                print(f"Файл не появился после save: {out_path_abs}")
             elif idx == 0:
-                print(f"  Первый файл сохранён: {output_path}")
+                print(f"  Первый файл сохранён: {out_path_abs}")
     
     # Проверяем, что файлы действительно сохранены
-    saved_files = list(output_dir.glob("*.wav"))
-    n_saved = len(saved_files)
+    out_dir_str = os.path.abspath(os.path.normpath(str(output_dir)))
+    out_dir_real = os.path.realpath(out_dir_str)
+    try:
+        names = [f for f in os.listdir(out_dir_real) if f.endswith(".wav")]
+    except OSError as e:
+        names = []
+        print(f"Не удалось прочитать папку: {e}")
+    n_saved = len(names)
     print(f"\n✓ Synthesis complete. Generated {len(dataset)} audio files.")
-    print(f"  Сохранено в (абсолютный путь): {output_dir}")
-    print(f"  Файлов в папке: {n_saved}")
+    print(f"  Папка (абсолютный путь): {out_dir_real}")
+    print(f"  Файлов .wav в папке: {n_saved}")
     if n_saved > 0:
-        print(f"  Примеры файлов:")
-        for f in sorted(saved_files)[:3]:
-            print(f"    - {f.name}")
-        if n_saved > 3:
-            print(f"    ... и ещё {n_saved - 3} файлов")
+        print(f"  Примеры:")
+        for name in sorted(names)[:5]:
+            print(f"    - {name}")
+        if n_saved > 5:
+            print(f"    ... и ещё {n_saved - 5}")
     else:
-        print(f"  ⚠️  ВНИМАНИЕ: Файлы не найдены в {output_dir}!")
-        print(f"     Проверьте права доступа и путь.")
+        print(f"В папке нет .wav! Откройте в файловом менеджере: {out_dir_real}")
 
 
 if __name__ == "__main__":
