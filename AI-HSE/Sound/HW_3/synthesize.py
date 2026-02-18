@@ -20,6 +20,9 @@ if env_path.exists():
     load_dotenv(env_path)
 
 
+# сохранение исходной директории до изменения Hydra
+_ORIGINAL_CWD = Path.cwd()
+
 @hydra.main(version_base=None, config_path="src/configs", config_name="baseline")
 def main(config):
     """
@@ -28,6 +31,8 @@ def main(config):
     Args:
         config: Hydra config with checkpoint, input_dir, output_dir specified via CLI.
     """
+    project_root = _ORIGINAL_CWD
+    
     # get paths from config
     checkpoint_path = OmegaConf.select(config, "checkpoint", default=None)
     input_dir = OmegaConf.select(config, "input_dir", default=None)
@@ -43,6 +48,13 @@ def main(config):
     checkpoint_path = Path(checkpoint_path)
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)
+    
+    if not checkpoint_path.is_absolute():
+        checkpoint_path = (project_root / checkpoint_path).resolve()
+    if not input_dir.is_absolute():
+        input_dir = (project_root / input_dir).resolve()
+    if not output_dir.is_absolute():
+        output_dir = (project_root / output_dir).resolve()
     
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
