@@ -44,6 +44,14 @@ def main(config):
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)
     
+    project_root = Path(__file__).parent.resolve()
+    if not checkpoint_path.is_absolute():
+        checkpoint_path = (project_root / checkpoint_path).resolve()
+    if not input_dir.is_absolute():
+        input_dir = (project_root / input_dir).resolve()
+    if not output_dir.is_absolute():
+        output_dir = (project_root / output_dir).resolve()
+    
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
     if not input_dir.exists():
@@ -158,9 +166,10 @@ def main(config):
                 sample_rate=sample_rate,
             )
     
-    print(f"\n✓ Synthesis complete. Generated {len(dataset)} audio files in {output_dir}")
-    print(f"  Original files: {input_dir}/audio/")
-    print(f"  Synthesized files: {output_dir}/")
+    n_saved = len(list(output_dir.glob("*.wav")))
+    print(f"\n✓ Synthesis complete. Generated {len(dataset)} audio files.")
+    print(f"  Сохранено в (абсолютный путь): {output_dir}")
+    print(f"  Файлов в папке: {n_saved}")
 
 
 if __name__ == "__main__":
