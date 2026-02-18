@@ -19,6 +19,8 @@ env_path = Path(__file__).parent / ".env"
 if env_path.exists():
     load_dotenv(env_path)
 
+_SCRIPT_DIR = Path(__file__).resolve().parent
+
 
 @hydra.main(version_base=None, config_path="src/configs", config_name="baseline")
 def main(config):
@@ -44,12 +46,10 @@ def main(config):
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)
     
-    # Определяем корень проекта (где лежит synthesize.py) - работает и в Colab
-    project_root = Path(__file__).parent.resolve()
+    project_root = _SCRIPT_DIR
     print(f"Project root: {project_root}")
     print(f"Current working directory: {Path.cwd()}")
     
-    # Преобразуем относительные пути в абсолютные относительно project_root
     if not checkpoint_path.is_absolute():
         checkpoint_path = (project_root / checkpoint_path).resolve()
     if not input_dir.is_absolute():
@@ -170,12 +170,11 @@ def main(config):
             if waveform_pred.dim() == 1:
                 waveform_pred = waveform_pred.unsqueeze(0)  # [1, L]
             
-            torchaudio.save(
-                str(output_path),
-                waveform_pred,
-                sample_rate=sample_rate,
-            )
-            if idx == 0:  # Выводим путь первого файла для отладки
+            out_str = str(output_path)
+            torchaudio.save(out_str, waveform_pred, sample_rate=sample_rate)
+            if not Path(out_str).exists():
+                print(f"  ⚠️ Ошибка: файл не создан: {output_path}")
+            elif idx == 0:
                 print(f"  Первый файл сохранён: {output_path}")
     
     # Проверяем, что файлы действительно сохранены
