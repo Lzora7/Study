@@ -20,8 +20,8 @@ if env_path.exists():
     load_dotenv(env_path)
 
 
-# сохранение исходной директории до изменения Hydra
-_ORIGINAL_CWD = Path.cwd()
+# Папка проекта = где лежит synthesize.py (не зависит от cwd при запуске из Colab/subprocess)
+_PROJECT_ROOT = Path(__file__).parent.resolve()
 
 @hydra.main(version_base=None, config_path="src/configs", config_name="baseline")
 def main(config):
@@ -31,7 +31,7 @@ def main(config):
     Args:
         config: Hydra config with checkpoint, input_dir, output_dir specified via CLI.
     """
-    project_root = _ORIGINAL_CWD
+    project_root = _PROJECT_ROOT
     
     # get paths from config
     checkpoint_path = OmegaConf.select(config, "checkpoint", default=None)
@@ -170,9 +170,10 @@ def main(config):
                 sample_rate=sample_rate,
             )
     
-    print(f"\n✓ Synthesis complete. Generated {len(dataset)} audio files in {output_dir}")
-    print(f"  Original files: {input_dir}/audio/")
-    print(f"  Synthesized files: {output_dir}/")
+    saved_files = list(output_dir.glob("*.wav"))
+    print(f"\n✓ Synthesis complete. Generated {len(dataset)} audio files.")
+    print(f"  Output dir (absolute): {output_dir}")
+    print(f"  Files saved: {len(saved_files)}")
 
 
 if __name__ == "__main__":
