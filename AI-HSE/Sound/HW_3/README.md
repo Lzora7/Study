@@ -6,7 +6,7 @@
 
 1. Клонируйте репозиторий и перейдите в ветку `sound-hw3`:
 ```bash
-git clone <repository_url>
+git clone <https://github.com/Lzora7/Study.git>
 cd HW_3
 git checkout sound-hw3
 ```
