@@ -22,7 +22,6 @@ if env_path.exists():
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 
-
 @hydra.main(version_base=None, config_path="src/configs", config_name="baseline")
 def main(config):
     """
@@ -164,7 +163,6 @@ def main(config):
             original_path = Path(audio_path)
             original_name = original_path.stem  # filename without extension
             
-            # save gen audio — всегда абсолютный путь для Colab/разных cwd
             output_path = output_dir / f"{original_name}_synthesized.wav"
             out_path_abs = os.path.abspath(os.path.normpath(str(output_path)))
             
@@ -180,27 +178,6 @@ def main(config):
                 print(f"Файл не появился после save: {out_path_abs}")
             elif idx == 0:
                 print(f"  Первый файл сохранён: {out_path_abs}")
-    
-    # Проверяем, что файлы действительно сохранены
-    out_dir_str = os.path.abspath(os.path.normpath(str(output_dir)))
-    out_dir_real = os.path.realpath(out_dir_str)
-    try:
-        names = [f for f in os.listdir(out_dir_real) if f.endswith(".wav")]
-    except OSError as e:
-        names = []
-        print(f"Не удалось прочитать папку: {e}")
-    n_saved = len(names)
-    print(f"\n✓ Synthesis complete. Generated {len(dataset)} audio files.")
-    print(f"  Папка (абсолютный путь): {out_dir_real}")
-    print(f"  Файлов .wav в папке: {n_saved}")
-    if n_saved > 0:
-        print(f"  Примеры:")
-        for name in sorted(names)[:5]:
-            print(f"    - {name}")
-        if n_saved > 5:
-            print(f"    ... и ещё {n_saved - 5}")
-    else:
-        print(f"В папке нет .wav! Откройте в файловом менеджере: {out_dir_real}")
 
 
 if __name__ == "__main__":
