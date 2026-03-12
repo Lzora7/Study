@@ -121,7 +121,7 @@ GitHub репозиторий с Docker-Compose, requirements. LLM не буде
 
 - Блок-схема для бейзлайна и основного MVP с ключевыми этапами решения задачи: подготовка данных, построение прогнозных моделей, оптимизация, тестирование, закрытие технического долга, подготовка пилота, другое. `Data Scientist`  
 
-![Блок схема разработки MVP](https://drive.google.com/file/d/1sqGG6LoDyLhS5ozIQzYsWEZ87WWn2lsi/view?usp=sharing)
+![Блок схема разработки MVP](Study/AI-HSE/LLMValid/HW_2/LLM Valid блок схема.jpg)
 
 - [Пример возможной блок схемы](https://github.com/IrinaGoloshchapova/ml_system_design_doc_ru/blob/main/product_schema.png?raw=true)
 > Схема обязательно включает в себя архитектуру бейзлайна. Если бейзлайн и основной MVP отличаются несущественно, то это может быть одна блок-схема. Если значительно, то рисуем две: отдельно для бейзлайна, отдельно для основного MVP.  
