@@ -170,18 +170,16 @@ curl http://localhost:9999/protected-route \
 1. **Клонируйте репозиторий:**
 ```bash
 git clone <repository-url>
-cd FastApi-URL
+cd Study/AI-HSE/AppliedPython/FastApiURL
 ```
 
 2. **Создайте файл окружения `.env`:**
-```env
-DB_NAME=postgres
-DB_USER=postgres
-DB_PASS=postgres
-SMTP_USER=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
-SECRET=your-secret-key-here
+```bash
+cp .env.example .env
 ```
+Задайте собственный `SECRET` и параметры SMTP, если используете почтовые задачи.
+В Docker адреса PostgreSQL и Redis задаёт Compose; `DB_HOST` и `DB_PORT`
+из примера предназначены для локального запуска. Локальные `.env` не публикуются в Git.
 
 3. **Запустите сервисы:**
 ```bash

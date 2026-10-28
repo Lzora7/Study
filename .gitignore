@@ -1,3 +1,28 @@
+# macOS
 .DS_Store
-*.ipynb_checkpoints
-**/.DS_Store
+
+# Python and notebooks
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Local configuration
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Local experiment tracking
+wandb/
+comet_logs/
+
+# Generated audio experiment outputs
+/AI-HSE/Sound/HW_3/outputs/
+/AI-HSE/Sound/*.log
