@@ -1,138 +1,85 @@
-# Deep Speech 2 ASR Project
+# Распознавание речи — Deep Speech 2
 
-Проект по распознаванию речи на основе архитектуры Deep Speech 2.
+Пайплайн преобразования аудио в текст: подготовка данных, обучение модели, декодирование и оценка качества.
+
+## Задачи и реализация
+
+- Модель распознавания речи на основе Deep Speech 2.
+- Обучение с CTC loss.
+- Аугментации аудио и спектрограмм.
+- Инференс на собственных аудиофайлах.
+- Оценка качества по WER и CER.
+- Конфигурации нескольких размеров модели.
+
+## Технологии
+
+Python, PyTorch, torchaudio, Hydra, OmegaConf, Comet ML / Weights & Biases.
 
 ## Установка
 
-1. Клонируйте репозиторий:
-```bash
-git clone <repository_url>
-cd HW_2_dpspch
-```
+Из корня репозитория:
 
-2. Установите зависимости:
 ```bash
+cd AI-HSE/Sound/HW_2_dpspch
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Обучение модели
+## Распознавание собственных аудиофайлов
 
-Для обучения модели используйте:
-```bash
-python train.py
+Подготовьте каталог:
+
+```text
+my-data/
+├── audio/
+│   ├── sample-01.wav
+│   └── sample-02.wav
+└── transcriptions/
+    ├── sample-01.txt
+    └── sample-02.txt
 ```
 
-Для обучения конкретной модели:
-```bash
-python train.py model=deep_speech2_small
-```
+Транскрипции нужны для оценки качества. Имена текстовых и аудиофайлов должны совпадать.
 
-## Инференс (Inference)
+Подготовьте чекпойнт обученной модели и выберите соответствующую ему конфигурацию архитектуры. Например, для `deep_speech2_small`:
 
-### Использование с предустановленными датасетами
-
-Для запуска inference на предустановленных датасетах (например, LibriSpeech):
-```bash
-python inference.py inferencer.from_pretrained=saved/<model_name>/model_best.pth
-```
-
-### Использование с кастомным датасетом
-
-1. Подготовьте датасет в следующем формате:
-```
-NameOfTheDirectoryWithUtterances
-├── audio
-│   ├── UtteranceID1.wav  # может быть .flac или .mp3
-│   ├── UtteranceID2.wav
-│   └── ...
-└── transcriptions  # опционально - ground truth транскрипции
-    ├── UtteranceID1.txt
-    ├── UtteranceID2.txt
-    └── ...
-```
-
-2. Запустите inference:
 ```bash
 python inference.py \
+    model=deep_speech2_small \
     datasets=custom_dataset \
-    datasets.custom_dataset.test.audio_dir=/path/to/audio \
-    datasets.custom_dataset.test.transcription_dir=/path/to/transcriptions \
-    inferencer.from_pretrained=saved/<model_name>/model_best.pth \
-    inferencer.save_path=custom_dataset_results
+    datasets.test.audio_dir=/absolute/path/my-data/audio \
+    datasets.test.transcription_dir=/absolute/path/my-data/transcriptions \
+    inferencer.from_pretrained=/absolute/path/model_best.pth \
+    inferencer.save_path=custom_results
 ```
 
-Предсказания будут сохранены в директории `data/saved/custom_dataset_results/test/` в виде файлов `{UtteranceID}.txt`, где каждый файл содержит предсказанный текст для соответствующего аудио файла.
+Предсказания сохраняются в `data/saved/custom_results/test/`. Для запуска без эталонных текстов не задавайте `datasets.test.transcription_dir`; WER/CER в таком сценарии не характеризуют качество распознавания.
 
-## Подсчет метрик WER/CER
-
-Для подсчета метрик Word Error Rate (WER) и Character Error Rate (CER) используйте скрипт `calc_metrics.py`:
+## Оценка качества
 
 ```bash
 python calc_metrics.py \
-    /path/to/predictions \
-    /path/to/ground_truth_transcriptions \
+    data/saved/custom_results/test \
+    /absolute/path/my-data/transcriptions \
     --show-samples 5 \
     --output metrics.json
 ```
 
-**Параметры:**
-- `predictions_dir`: Директория с предсказаниями (файлы `{UtteranceID}.txt`)
-- `ground_truth_dir`: Директория с ground truth транскрипциями (файлы `{UtteranceID}.txt`)
-- `--show-samples N`: Количество примеров для отображения (по умолчанию: 5)
-- `--output PATH`: Опционально: путь для сохранения детальных метрик в JSON формате
+WER измеряет ошибки на уровне слов, CER — на уровне символов. Для обеих метрик меньшее значение означает лучшее качество.
 
-**Пример использования:**
+## Обучение
+
 ```bash
-# После запуска inference на кастомном датасете
-python calc_metrics.py \
-    data/saved/custom_dataset_results/test \
-    data/custom_dataset/transcriptions \
-    --show-samples 10 \
-    --output results/metrics.json
+python train.py model=deep_speech2_small
 ```
 
-Скрипт выведет:
-- Средние метрики WER и CER
-- Количество обработанных примеров
-- Примеры предсказаний (если указан `--show-samples`)
+Перед запуском проверьте конфигурацию датасета, параметры обучения и настройки выбранного сервиса логирования. Для обучения рекомендуется GPU. Конфигурации находятся в `src/configs/`.
 
-## Демонстрация
+## Демонстрация и результаты
 
-Для интерактивной демонстрации использования проекта откройте `demo.ipynb` в Jupyter Notebook или Google Colab.
+[demo.ipynb](demo.ipynb) содержит примеры инференса, аугментаций и декодирования. Для выполнения необходимы веса модели. Численные WER/CER следует сравнивать на одной тестовой выборке с указанием конфигурации модели и чекпойнта.
 
-Ноутбук включает:
-1. Клонирование репозитория и установку зависимостей
-2. Загрузку весов модели
-3. Запуск inference.py
-4. Работу с собственными данными
-5. Демонстрацию ASR-аугментаций
-6. Демонстрацию hand-crafted beam search
+Основа проекта — учебный шаблон ASR. Лицензия: [LICENSE](LICENSE).
 
-## Структура проекта
-
-```
-HW_2_dpspch/
-├── src/
-│   ├── configs/          # Конфигурации Hydra
-│   ├── datasets/         # Классы датасетов
-│   │   └── custom_dir_audio_dataset.py  # CustomDirAudioDataset
-│   ├── model/            # Архитектуры моделей
-│   ├── metrics/          # Метрики (WER, CER)
-│   ├── trainer/          # Тренировка и инференс
-│   └── transforms/       # Аугментации
-├── train.py              # Скрипт обучения
-├── inference.py          # Скрипт инференса
-├── calc_metrics.py       # Скрипт подсчета метрик
-├── demo.ipynb           # Демонстрационный ноутбук
-└── README.md            # Этот файл
-```
-
-## Конфигурация
-
-Проект использует Hydra для управления конфигурациями. Основные конфигурации находятся в `src/configs/`.
-
-Для кастомного датасета создан конфиг `src/configs/datasets/custom_dataset.yaml`, который можно использовать через:
-```bash
-python inference.py datasets=custom_dataset
-```
-
+[Все проекты Sound](../README.md)
