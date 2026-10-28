@@ -6,8 +6,7 @@
 | --- | --- |
 | Машинное обучение | [Регрессия](ML/HW_1_Regression/), [градиентный спуск](ML/HW_2_Gradient_descent/), [классификация](ML/HW_3_Calssification/), [деревья](ML/HW_4_WoodenML/), [бустинг](ML/HW_5_Boosting/), [uplift](ML/HW_6_Uplift/) |
 | Глубокое обучение | [Полносвязные сети](DL/HW_1/), [CNN и классификация](DL/HW_2/), [детекция объектов](DL/HW_3/) |
-| NLP | [Эмбеддинги и поиск](NLP/HW1_Embeddings/), [BERT и GPT](NLP/HW2_Bert_GPT/), [PEFT: prompt tuning и LoRA](NLP/HW_3/) |
-| NLP-2 | [Спекулятивное декодирование и архитектура Qwen](NLP-2/NLP-2_hw_1.ipynb) |
+| NLP | [Эмбеддинги и поиск](NLP/HW1_Embeddings/), [BERT и GPT](NLP/HW2_Bert_GPT/), [PEFT: prompt tuning и LoRA](NLP/HW_3/), [Спекулятивное декодирование и архитектура Qwen](NLP/SpeculativeDecoding/NLP-2_hw_1.ipynb) |
 | Генеративные модели | [Speech-to-text](GenModels/HW_1/), [cWGAN и cVAE](GenModels/HW_2/), [HW 3](GenModels/HW_3/), [авторегрессионные модели изображений](GenModels/HW_4/) |
 | Валидация LLM | [Агрегация меток асессоров](LLMValid/HW_2/HW2.%20AggLabels.ipynb), [документ ML System Design](LLMValid/HW_2/ML_System_Design_Doc_Template.md) |
 | Звук | [Синтез музыки](Sound/HW_1/), [базовый ASR](Sound/HW_2/README.md), [Deep Speech 2](Sound/HW_2_dpspch/README.md), [вокодер iSTFTNet](Sound/HW_3/README.md) |
